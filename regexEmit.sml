@@ -6,11 +6,13 @@ open HolKernel Parse boolLib proofManagerLib bossLib;
 
 open EmitML regexTheory listTheory basis_emitTheory;
 
-val output_path = "";
+val output_path = "ML/";
 
 emitML output_path ("regex",
   OPEN ["list"] ::
-  MLSIG "type list = listML.list" ::
+  (* emitML tries to convert CONS into ::, but seems to fail when it's partially
+   * applied (?). Declare it manually. *)
+  MLSTRUCT "fun CONS a b = a :: b" ::
   ABSDATATYPE (["'a"], `Reg = Eps | Sym 'a | Alt Reg Reg | Seq Reg Reg | Rep Reg`) ::
   map DEFN_NOSIG [
     split_def,

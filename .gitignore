@@ -1,8 +1,9 @@
-/.hollogs/
-/.HOLMK/
+.hollogs/
+.HOLMK/
 *.ui
 *.uo
-/regexML.sig
-/regexML.sml
+*ML.sig
+*ML.sml
 *Theory.sml
 *Theory.sig
+/ML/test

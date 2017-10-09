@@ -1,0 +1,15 @@
+OPTIONS = NO_OVERLAY
+EXTRA_CLEANS = $(wildcard *ML.sig) $(wildcard *ML.sml) test
+INCLUDES = .. $(HOLDIR)/src/emit/ML/
+
+default: all
+
+regexML.sig: ../regexEmit.uo
+	cd ../; ./ML/runhol.sh regexEmit.sml
+
+regexML.sml: regexML.sig
+
+test: test.uo
+	python3 combine.py test > .temp && polyc .temp -o test && rm .temp
+
+all: regexML.ui regexML.uo test

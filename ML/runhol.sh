@@ -1,10 +1,8 @@
 #!/bin/bash
 POLY=/usr/bin/poly
+DIR=$(dirname "$(readlink -f "$0")")
 
-if [ -z "$HOLDIR" ]; then
-	X=$(which hol)
-	HOLDIR=${X%/bin/hol}
-fi
+HOLDIR=$("$DIR/holdir.sh")
 BIN="$HOLDIR/bin"
 
 if [ -z "$HEAP" ]; then
