@@ -7,69 +7,6 @@ open EmitML;
 
 val ERR = mk_HOL_ERR "regex";
 
-(*
-val eps = ``Eps : 'a Reg``;
-fun mk_sym ch = list_mk_comb (``Sym``, [ch])
-fun mk_alt tm1 tm2 =
-  list_mk_comb (``Alt``, [tm1, tm2])
-  handle HOL_ERR _ => raise ERR "mk_sh_and" "Non-reg argument";
-
-exception SyntaxError of string;
-
-fun parseRegex (input : string) : term = let
-  val len = size input
-  val pos = ref 0
-  fun peek() = if (!pos) == len then Char.minChar else String.sub(input, !pos)
-  fun eat() =
-    (pos := (!pos) + 1;
-    String.sub(input, (!pos) - 1))
-
-  fun expect ch = (
-    if (!pos) == len then raise SyntaxError
-        ("expected " ^ str ch ^ ", found EOF");
-    if String.sub(input, !pos) <> ch then raise SyntaxError
-        ("expected " ^ str ch ^ ", found " ^ substring(input, !pos, 1));
-    pos := (!pos) + 1; ())
-
-  val moreAtoms = notContains "\^@)|"
-
-  fun parseAlt() = let
-    a = parseSeq
-  in
-    if peek() == #"|" then mk_alt a parseAlt()
-    else a
-  end
-
-  and parseSeq() =
-    if moreAtoms (peek()) then parseNonEmptySeq()
-    else eps
-
-  and parseNonEmptySeq() = let
-    a = parseRep
-  in
-    if moreAtoms (peek()) then
-      mk_seq a parseNonEmptySeq()
-    else a
-  end
-
-  and parseRep() = addStars parseAtom()
-
-  and addStars tm =
-    if peek() == #"*" then (expect #"*"; addStars (mk_rep tm))
-    else tm
-
-  and parseAtom() = let
-    ch = eat()
-  in
-    if ch == #"(" then fst (parseAlt(), expect #")")
-    else mk_sym ch
-  end
-
-in
-  parseAlt input
-end
-*)
-
 val _ = Datatype `Reg = Eps | Sym 'a | Alt Reg Reg | Seq Reg Reg | Rep Reg`;
 
 val language_of = Define `

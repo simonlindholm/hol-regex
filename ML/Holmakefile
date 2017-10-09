@@ -9,7 +9,7 @@ regexML.sig: ../regexEmit.uo
 
 regexML.sml: regexML.sig
 
-test: test.uo
+test: test.uo regexML.sml regexLib.sml
 	python3 combine.py test > .temp && polyc .temp -o test && rm .temp
 
 all: regexML.ui regexML.uo test

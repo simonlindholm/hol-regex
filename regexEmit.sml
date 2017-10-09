@@ -13,7 +13,7 @@ emitML output_path ("regex",
   (* emitML tries to convert CONS into ::, but seems to fail when it's partially
    * applied (?). Declare it manually. *)
   MLSTRUCT "fun CONS a b = a :: b" ::
-  ABSDATATYPE (["'a"], `Reg = Eps | Sym 'a | Alt Reg Reg | Seq Reg Reg | Rep Reg`) ::
+  DATATYPE (`Reg = Eps | Sym 'a | Alt Reg Reg | Seq Reg Reg | Rep Reg`) ::
   map DEFN_NOSIG [
     split_def,
     add_to_head_def,
