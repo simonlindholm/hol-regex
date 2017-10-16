@@ -2,7 +2,7 @@ open HolKernel Parse boolLib bossLib;
 
 val _ = new_theory "regex";
 
-open listTheory rich_listTheory pairTheory pred_setTheory;
+open listTheory rich_listTheory pairTheory pairSimps pred_setTheory;
 
 (* Definition of a regex. *)
 
@@ -69,11 +69,19 @@ assert_false ``accept (Rep (Sym 1)) [1;2]``;
 (* Basic lemmata *)
 
 val SPLIT_EMPTY1 = store_thm ("SPLIT_EMPTY1",
-  ``∀ a. MEM ([], a) (split a)``,
+  ``∀ (a : 'a list). MEM ([], a) (split a)``,
   Cases >> SIMP_TAC list_ss [split]);
 
-val SPLIT_CONCAT = store_thm ("SPLIT_CONCAT",
-  ``∀ a b. MEM (a, b) (split (a ++ b))``,
+val SPLIT_SOUND = store_thm ("SPLIT_SOUND",
+  ``∀ x y (w : 'a list). MEM (x, y) (split w) ⇒ (x ++ y = w)``,
+  Induct_on `w` >| [
+    SIMP_TAC list_ss [split],
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [split, MEM_MAP, PAIR_MAP]
+  ]);
+
+val SPLIT_COMPLETE = store_thm ("SPLIT_COMPLETE",
+  ``∀ a (b : 'a list). MEM (a, b) (split (a ++ b))``,
   Induct_on `a` >| [
     SIMP_TAC list_ss [split, SPLIT_EMPTY1],
 
@@ -91,23 +99,81 @@ val SPLIT_CONCAT = store_thm ("SPLIT_CONCAT",
     ASM_SIMP_TAC bool_ss []
   ]);
 
+val PARTS_SOUND = store_thm ("PARTS_SOUND",
+  ``∀ (li : 'a list) part. MEM part (parts li) ⇒ (FLAT part = li)``,
+  Induct >| [
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [parts],
+
+    REPEAT STRIP_TAC >>
+    Cases_on `li` >>
+    FULL_SIMP_TAC list_ss [parts, MEM_MAP] >>
+
+    `FLAT y = h'::t` by ASM_SIMP_TAC bool_ss[] >>
+    Cases_on `y` >- FULL_SIMP_TAC list_ss [FLAT] >>
+
+    FULL_SIMP_TAC list_ss [add_to_head]
+  ]);
+
+(* We'd want to say that parts is also complete in the sense that if we flatten
+ * an arbitrary list, parts will recover (among else) that list. But that isn't
+ * quite true, because we skip empty parts. Instead we settle for showing that
+ * parts recovers a *subset* of the original list -- for our purposes, we don't
+ * need it to be ordered. *)
+val PARTS_IN_FLAT = store_thm ("PARTS_IN_FLAT",
+  ``∀ li. ∃ part. ∀ (x : 'a list).
+    MEM part (parts (FLAT li)) ∧ (MEM x part ⇒ MEM x li)``,
+    cheat);
+
 val ACCEPT_SEQ_CONCAT = store_thm ("ACCEPT_SEQ_CONCAT",
   ``∀ p q u (v : 'a list).
     accept p u ∧ accept q v ⇒ accept (Seq p q) (u ++ v)``,
   REPEAT STRIP_TAC >>
   SIMP_TAC list_ss [accept, EXISTS_MEM] >>
   EXISTS_TAC ``(u : 'a list, v : 'a list)`` >>
-  ASM_SIMP_TAC std_ss [SPLIT_CONCAT]);
+  ASM_SIMP_TAC std_ss [SPLIT_COMPLETE]);
 
 val ACCEPT_REP_NIL = store_thm ("ACCEPT_REP_NIL",
   ``∀ (p : 'a Reg). accept (Rep p) []``,
   SIMP_TAC list_ss [accept, parts]);
 
-val ACCEPT_REP_CONCAT = store_thm ("ACCEPT_REP_CONCAT",
-  ``∀ p u (v : 'a list).
-    accept p u ∧ accept (Rep p) v ⇒ accept (Rep p) (u ++ v)``,
-    cheat);
-
 (* Equivalence with language *)
+
+val set_ss = std_ss ++ SET_SPEC_ss;
+
+val ACCEPT_IN_LANG = prove (
+  ``∀ (r : 'a Reg) w. accept r w ⇒  w ∈ (language_of r)``,
+  Induct >> REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC set_ss [language_of, accept, IN_SING, IN_UNION, NULL] >| [
+    Cases_on `w` >> FULL_SIMP_TAC list_ss [],
+
+    FULL_SIMP_TAC (std_ss ++ gen_beta_ss) [EXISTS_MEM] >>
+    EXISTS_TAC ``FST (e : 'a list # 'a list)`` >>
+    EXISTS_TAC ``SND (e : 'a list # 'a list)`` >>
+    ASM_SIMP_TAC std_ss [SPLIT_SOUND],
+
+    FULL_SIMP_TAC std_ss [EXISTS_MEM, EVERY_MEM] >>
+    EXISTS_TAC ``e : 'a list list`` >>
+    FULL_SIMP_TAC std_ss [PARTS_SOUND]
+  ]);
+
+val LANG_IN_ACCEPT = prove (
+  ``∀ (r : 'a Reg) w. w ∈ (language_of r) ⇒ accept r w``,
+  Induct >> REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC set_ss [language_of, accept, IN_SING, IN_UNION, NULL] >| [
+    METIS_TAC [accept, ACCEPT_SEQ_CONCAT],
+
+    `∃ part. ∀ x. MEM part (parts (FLAT li)) ∧ (MEM x part ⇒ MEM x li)`
+      by REWRITE_TAC [PARTS_IN_FLAT] >>
+    SIMP_TAC list_ss [EXISTS_MEM] >>
+    EXISTS_TAC ``(part : 'a list list)`` >>
+    ASM_SIMP_TAC std_ss [EVERY_MEM]
+  ]);
+
+val ACCEPT_CORRECT = store_thm ("ACCEPT_CORRECT",
+  ``∀ (r : 'a Reg) w. accept r w ⇔ w ∈ (language_of r)``,
+  REPEAT STRIP_TAC >>
+  EQ_TAC >>
+  REWRITE_TAC [ACCEPT_IN_LANG, LANG_IN_ACCEPT]);
 
 val _ = export_theory();
