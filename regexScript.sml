@@ -39,6 +39,7 @@ val accept = Define `
   (accept (Rep r) u = EXISTS (EVERY (accept r)) (parts u)) `;
 
 (** Some tests **)
+
 fun assert_eq expected tm = let
   val tm2 = snd (dest_thm (EVAL tm));
   val rhs = snd (dest_eq tm2);
@@ -52,19 +53,24 @@ end
 val assert_true = assert_eq ``T``;
 val assert_false = assert_eq ``F``;
 
-assert_true ``accept (Eps : 'a Reg) []``;
-assert_false ``accept Eps [1]``;
-assert_false ``accept (Alt (Sym 1) (Sym 2)) []``;
-assert_true ``accept (Alt (Sym 1) (Sym 2)) [1]``;
-assert_false ``accept (Alt (Sym 1) (Sym 2)) [3]``;
-assert_false ``accept (Alt (Sym 1) (Sym 2)) [1;1]``;
-assert_false ``accept (Seq (Sym 1) (Sym 2)) []``;
-assert_false ``accept (Seq (Sym 1) (Sym 2)) [1]``;
-assert_true ``accept (Seq (Sym 1) (Sym 2)) [1;2]``;
-assert_false ``accept (Seq (Sym 1) (Sym 2)) [1;1;2]``;
-assert_true ``accept (Rep (Sym 1)) []``;
-assert_true ``accept (Rep (Sym 1)) [1;1;1]``;
-assert_false ``accept (Rep (Sym 1)) [1;2]``;
+val _ = assert_eq ``[([],[1]); ([1],[])]`` ``split [1]``;
+val _ = assert_eq ``[([],[1;2]); ([1],[2]); ([1;2],[])]`` ``split [1;2]``;
+
+val _ = assert_eq ``[[[1];[2]]; [[1;2]]]`` ``parts [1;2]``;
+
+val _ = assert_true ``accept (Eps : 'a Reg) []``;
+val _ = assert_false ``accept Eps [1]``;
+val _ = assert_false ``accept (Alt (Sym 1) (Sym 2)) []``;
+val _ = assert_true ``accept (Alt (Sym 1) (Sym 2)) [1]``;
+val _ = assert_false ``accept (Alt (Sym 1) (Sym 2)) [3]``;
+val _ = assert_false ``accept (Alt (Sym 1) (Sym 2)) [1;1]``;
+val _ = assert_false ``accept (Seq (Sym 1) (Sym 2)) []``;
+val _ = assert_false ``accept (Seq (Sym 1) (Sym 2)) [1]``;
+val _ = assert_true ``accept (Seq (Sym 1) (Sym 2)) [1;2]``;
+val _ = assert_false ``accept (Seq (Sym 1) (Sym 2)) [1;1;2]``;
+val _ = assert_true ``accept (Rep (Sym 1)) []``;
+val _ = assert_true ``accept (Rep (Sym 1)) [1;1;1]``;
+val _ = assert_false ``accept (Rep (Sym 1)) [1;2]``;
 
 (** Basic lemmata **)
 
