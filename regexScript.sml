@@ -217,4 +217,72 @@ val ACCEPT_CORRECT = store_thm ("ACCEPT_CORRECT",
   EQ_TAC >>
   REWRITE_TAC [ACCEPT_IN_LANG, LANG_IN_ACCEPT]);
 
+(** Definition of a marked regex, on which the optimized-but-uncached regex
+ * matcher operates **)
+
+val _ = Datatype `MReg = MEps | MSym bool 'a | MAlt MReg MReg | MSeq MReg MReg | MRep MReg`;
+
+(** Optimized-but-uncached regex matcher. **)
+
+val empty = Define `
+  (empty MEps = T) ∧
+  (empty (MSym _ (_ : 'a)) = F) ∧
+  (empty (MAlt p q) = empty p ∨ empty q) ∧
+  (empty (MSeq p q) = empty p ∧ empty q) ∧
+  (empty (MRep r) = T) `;
+
+val final = Define `
+  (final MEps = F) ∧
+  (final (MSym b (_ : 'a)) = b) ∧
+  (final (MAlt p q) = final p ∨ final q) ∧
+  (final (MSeq p q) = (final p ∧ empty q) ∨ final q) ∧
+  (final (MRep r) = final r) `;
+
+val shift = Define `
+  (shift _ MEps _ = MEps) ∧
+  (shift m (MSym _ x) c = MSym (m ∧ (x = c)) x) ∧
+  (shift m (MAlt p q) c = MAlt (shift m p c) (shift m q c)) ∧
+  (shift m (MSeq p q) c = MSeq (shift m p c) (shift ((m ∧ empty p) ∨ final p) q c)) ∧
+  (shift m (MRep r) c = MRep (shift (m ∨ final r) r c)) `;
+
+val acceptM = Define `
+  (acceptM r ([] : 'a list) = empty r) ∧
+  (acceptM r (c :: cs) = final (FOLDL (shift F) (shift T r c) cs)) `;
+
+val mark_reg = Define `
+  (mark_reg Eps = MEps) ∧
+  (mark_reg (Sym (c : 'a)) = MSym F c) ∧
+  (mark_reg (Alt p q) = MAlt (mark_reg p) (mark_reg q)) ∧
+  (mark_reg (Seq p q) = MSeq (mark_reg p) (mark_reg q)) ∧
+  (mark_reg (Rep r) = MRep (mark_reg r)) `;
+
+val accept2 = Define `accept2 r l = acceptM (mark_reg r) l`;
+
+(** Some tests **)
+
+val _ = assert_true ``empty (MAlt MEps (MEps : 'a MReg))``;
+val _ = assert_true ``empty (MAlt MEps (MSym T 2))``;
+val _ = assert_false ``empty (MAlt (MSym T 1) (MSym T 2))``;
+
+val _ = assert_false ``final (MAlt MEps (MEps : 'a MReg))``;
+val _ = assert_true ``final (MAlt MEps (MSym T 2))``;
+val _ = assert_true ``final (MSeq MEps (MSym T 2))``;
+val _ = assert_true ``final (MSeq (MSym T 2) MEps)``;
+val _ = assert_true ``final (MSeq (MSym T 2) (MSym T 3))``;
+val _ = assert_false ``final (MSeq (MSym T 2) (MSym F 3))``;
+
+val _ = assert_true ``accept2 (Eps : 'a Reg) []``;
+val _ = assert_false ``accept2 Eps [1]``;
+val _ = assert_false ``accept2 (Alt (Sym 1) (Sym 2)) []``;
+val _ = assert_true ``accept2 (Alt (Sym 1) (Sym 2)) [1]``;
+val _ = assert_false ``accept2 (Alt (Sym 1) (Sym 2)) [3]``;
+val _ = assert_false ``accept2 (Alt (Sym 1) (Sym 2)) [1;1]``;
+val _ = assert_false ``accept2 (Seq (Sym 1) (Sym 2)) []``;
+val _ = assert_false ``accept2 (Seq (Sym 1) (Sym 2)) [1]``;
+val _ = assert_true ``accept2 (Seq (Sym 1) (Sym 2)) [1;2]``;
+val _ = assert_false ``accept2 (Seq (Sym 1) (Sym 2)) [1;1;2]``;
+val _ = assert_true ``accept2 (Rep (Sym 1)) []``;
+val _ = assert_true ``accept2 (Rep (Sym 1)) [1;1;1]``;
+val _ = assert_false ``accept2 (Rep (Sym 1)) [1;2]``;
+
 val _ = export_theory();
