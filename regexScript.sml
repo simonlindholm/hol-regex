@@ -4,11 +4,11 @@ val _ = new_theory "regex";
 
 open listTheory rich_listTheory pairTheory pairSimps pred_setTheory;
 
-(* Definition of a regex. *)
+(** Definition of a regex. **)
 
 val _ = Datatype `Reg = Eps | Sym 'a | Alt Reg Reg | Seq Reg Reg | Rep Reg`;
 
-(* Set-theoretic definition of what a regex matches. This is our ground truth. *)
+(** Set-theoretic definition of what a regex matches. This is our ground truth. **)
 
 val language_of = Define `
   (language_of (Eps : 'a Reg) = {[]}) ∧
@@ -17,7 +17,7 @@ val language_of = Define `
   (language_of (Seq a b) = {(x ++ y) | x ∈ language_of a ∧ y ∈ language_of b}) ∧
   (language_of (Rep a) = {FLAT li | ∀x. MEM x li ⇒ x ∈ language_of a}) `;
 
-(* Naive, but executable, regex matcher. *)
+(** Naive, but executable, regex matcher. **)
 
 val split = Define `
   (split ([] : 'a list) = [([], [])]) ∧
@@ -38,7 +38,7 @@ val accept = Define `
   (accept (Seq p q) u = EXISTS (λ(x,y). accept p x ∧ accept q y) (split u)) ∧
   (accept (Rep r) u = EXISTS (EVERY (accept r)) (parts u)) `;
 
-(* Some tests *)
+(** Some tests **)
 fun assert_eq expected tm = let
   val tm2 = snd (dest_thm (EVAL tm));
   val rhs = snd (dest_eq tm2);
@@ -66,7 +66,7 @@ assert_true ``accept (Rep (Sym 1)) []``;
 assert_true ``accept (Rep (Sym 1)) [1;1;1]``;
 assert_false ``accept (Rep (Sym 1)) [1;2]``;
 
-(* Basic lemmata *)
+(** Basic lemmata **)
 
 val SPLIT_EMPTY1 = store_thm ("SPLIT_EMPTY1",
   ``∀ (a : 'a list). MEM ([], a) (split a)``,
@@ -121,9 +121,44 @@ val PARTS_SOUND = store_thm ("PARTS_SOUND",
  * parts recovers a *subset* of the original list -- for our purposes, we don't
  * need it to be ordered. *)
 val PARTS_IN_FLAT = store_thm ("PARTS_IN_FLAT",
-  ``∀ li. ∃ part. ∀ (x : 'a list).
-    MEM part (parts (FLAT li)) ∧ (MEM x part ⇒ MEM x li)``,
-    cheat);
+  ``∀ li. ∃ part. MEM part (parts (FLAT li)) ∧
+    ∀ (x : 'a list). MEM x part ⇒ MEM x li``,
+  Induct >| [
+    EXISTS_TAC ``[] : 'a list list`` >>
+    ASM_SIMP_TAC list_ss [FLAT, parts],
+
+    FULL_SIMP_TAC bool_ss [] >>
+    Cases >| [
+      EXISTS_TAC ``part : 'a list list`` >>
+      ASM_SIMP_TAC list_ss [],
+
+      EXISTS_TAC ``((h'::t) :: part) : 'a list list`` >>
+      REPEAT STRIP_TAC >| [
+        WEAKEN_TAC is_forall >>
+        ASM_SIMP_TAC list_ss [] >>
+
+        (* Generalize "FLAT li" to any list *)
+        `∃ rest. FLAT li = rest` by ASM_SIMP_TAC bool_ss[] >>
+        FULL_SIMP_TAC bool_ss[] >>
+        WEAKEN_TAC is_eq >>
+
+        ID_SPEC_TAC ``h' : 'a`` >>
+        Induct_on `t` >| [
+          ASM_SIMP_TAC list_ss [] >>
+          Cases_on `rest` >>
+          FULL_SIMP_TAC list_ss [parts, add_to_head] >>
+          Cases_on `t` >>
+          FULL_SIMP_TAC list_ss [parts, add_to_head, MEM_MAP] >>
+          METIS_TAC[parts, add_to_head],
+
+          FULL_SIMP_TAC list_ss [parts, add_to_head] >>
+          METIS_TAC[parts, add_to_head, MEM_MAP]
+        ],
+
+        FULL_SIMP_TAC list_ss []
+      ]
+    ]
+  ]);
 
 val ACCEPT_SEQ_CONCAT = store_thm ("ACCEPT_SEQ_CONCAT",
   ``∀ p q u (v : 'a list).
@@ -137,7 +172,7 @@ val ACCEPT_REP_NIL = store_thm ("ACCEPT_REP_NIL",
   ``∀ (p : 'a Reg). accept (Rep p) []``,
   SIMP_TAC list_ss [accept, parts]);
 
-(* Equivalence with language *)
+(** Equivalence with language **)
 
 val set_ss = std_ss ++ SET_SPEC_ss;
 
@@ -163,7 +198,7 @@ val LANG_IN_ACCEPT = prove (
   FULL_SIMP_TAC set_ss [language_of, accept, IN_SING, IN_UNION, NULL] >| [
     METIS_TAC [accept, ACCEPT_SEQ_CONCAT],
 
-    `∃ part. ∀ x. MEM part (parts (FLAT li)) ∧ (MEM x part ⇒ MEM x li)`
+    `∃ part. MEM part (parts (FLAT li)) ∧ ∀ x. (MEM x part ⇒ MEM x li)`
       by REWRITE_TAC [PARTS_IN_FLAT] >>
     SIMP_TAC list_ss [EXISTS_MEM] >>
     EXISTS_TAC ``(part : 'a list list)`` >>
