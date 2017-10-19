@@ -323,21 +323,20 @@ val SHIFT_IS_MARKED = store_thm ("SHIFT_IS_MARKED",
   REPEAT STRIP_TAC >>
   FULL_SIMP_TAC bool_ss [shift, is_marked_reg]);
 
-val ACCEPTM_ALT1 = store_thm ("ACCEPTM_ALT1",
-  ``∀ p q (li : 'a list). acceptM p li ⇒ acceptM (MAlt p q) li``,
-  cheat);
-
-val ACCEPTM_ALT2 = store_thm ("ACCEPTM_ALT2",
-  ``∀ p q (li : 'a list). acceptM q li ⇒ acceptM (MAlt p q) li``,
-  cheat);
-
 val EMPTY_SOUND = store_thm ("EMPTY_SOUND",
   ``∀ r (mr : 'a MReg). empty mr ∧ is_marked_reg r mr ⇒ [] ∈ language_of r``,
-  cheat);
+  Induct >> Cases_on `mr` >>
+  REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC (list_ss ++ SET_SPEC_ss ++ QI_ss)
+    [empty, is_marked_reg, language_of, IN_SING] >>
+  EXISTS_TAC ``[] : 'a list list`` >>
+  SIMP_TAC list_ss []);
 
 val EMPTY_COMPLETE = store_thm ("EMPTY_COMPLETE",
   ``∀ r (mr : 'a MReg). [] ∈ language_of r ∧ is_marked_reg r mr ⇒ empty mr``,
-  cheat);
+  Induct >> Cases_on `mr` >>
+  REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC (list_ss ++ SET_SPEC_ss) [empty, is_marked_reg, language_of, IN_SING]);
 
 val MARK_LE_REFL = store_thm ("MARK_LE_REFL",
   ``∀ (r : 'a MReg). mark_le r r``,
@@ -387,6 +386,24 @@ val IS_MARKED_REG_LE = store_thm ("IS_MARKED_REG_LE",
   METIS_TAC []);
 
 (** Equivalence with language **)
+
+val ACCEPTM_ALT = store_thm ("ACCEPTM_ALT",
+  ``∀ p q (li : 'a list). (acceptM p li ∨ acceptM q li) ⇒ acceptM (MAlt p q) li``,
+  NTAC 3 STRIP_TAC >>
+  FULL_SIMP_TAC bool_ss [acceptM] >>
+  `∃ mp mq b.
+    (FOLDL (shift F) (MInit T p) li = MInit b mp) ∧
+    (FOLDL (shift F) (MInit T q) li = MInit b mq) ∧
+    (FOLDL (shift F) (MInit T (MAlt p q)) li = MInit b (MAlt mp mq))` by (
+    ID_SPEC_TAC ``li : 'a list`` >>
+    INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+      ASM_SIMP_TAC list_ss [] >>
+      METIS_TAC [MARK_LE_REFL],
+      STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [shift, FOLDL_SNOC] >>
+      RW_TAC (bool_ss ++ QI_ss) [SHIFT_LE]
+    ]) >>
+  METIS_TAC [final, empty]);
 
 val ACCEPTM_REP_APPEND = prove (
   ``∀ r x (y : 'a list).
@@ -491,7 +508,7 @@ val LANG_IN_ACCEPTM = prove (
   REPEAT STRIP_TAC >| [
     FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final],
     FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final, shift],
-    FULL_SIMP_TAC list_ss [IN_UNION, ACCEPTM_ALT1, ACCEPTM_ALT2],
+    FULL_SIMP_TAC list_ss [IN_UNION, ACCEPTM_ALT],
     FULL_SIMP_TAC set_ss [ACCEPTM_SEQ],
     FULL_SIMP_TAC set_ss [ACCEPTM_REP]
   ]);
