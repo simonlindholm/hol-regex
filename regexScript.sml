@@ -396,43 +396,32 @@ val ACCEPTM_REP_APPEND = prove (
   FULL_SIMP_TAC list_ss [acceptM, FOLDL_APPEND] >>
 
   `∃ mr b. mark_le (mark_reg r) mr ∧
-    (MInit b (MRep mr) = FOLDL (shift F) (MInit T (MRep (mark_reg r))) x)` by (
+    (FOLDL (shift F) (MInit T (MRep (mark_reg r))) x = MInit b (MRep mr))` by (
     ID_SPEC_TAC ``x : 'a list`` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [MARK_LE_REFL],
 
       STRIP_TAC >>
-      FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
-      PAT_X_ASSUM ``MInit b (MRep mr) = _`` (ASSUME_TAC o GSYM) >>
-      FULL_SIMP_TAC list_ss [shift] >>
+      FULL_SIMP_TAC list_ss [shift, FOLDL_SNOC] >>
       METIS_TAC [MARK_REG_LE, SHIFT_IS_MARKED, MARK_IS_MARKED, IS_MARKED_REG_LE]
     ]) >>
 
-  PAT_X_ASSUM ``MInit b (MRep mr) = _`` (ASSUME_TAC o GSYM) >>
   FULL_SIMP_TAC list_ss [] >>
   WEAKEN_TAC is_eq >>
 
   `∃ mr2 b2 mr3 b3. mark_le mr3 mr2 ∧ (b3 ⇒ b2 ∨ final mr2) ∧
-    ((MInit b3 mr3) = FOLDL (shift F) (MInit T (mark_reg r)) y) ∧
-    (MInit b2 (MRep mr2) = FOLDL (shift F) (MInit b (MRep mr)) y)` by (
+    (FOLDL (shift F) (MInit T (mark_reg r)) y = (MInit b3 mr3)) ∧
+    (FOLDL (shift F) (MInit b (MRep mr)) y = MInit b2 (MRep mr2))` by (
     ID_SPEC_TAC ``y : 'a list`` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [final],
 
       STRIP_TAC >>
-      FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
-      PAT_X_ASSUM ``MInit b2 (MRep mr2) = _`` (ASSUME_TAC o GSYM) >>
-      FULL_SIMP_TAC list_ss [shift] >>
-      PAT_X_ASSUM ``MInit b3 mr3 = _`` (ASSUME_TAC o GSYM) >>
-      FULL_SIMP_TAC list_ss [shift] >>
-
+      FULL_SIMP_TAC list_ss [shift, FOLDL_SNOC] >>
       REPEAT (WEAKEN_TAC is_eq) >>
-      EXISTS_TAC ``shift (b2 ∨ final mr2) mr2 (x : 'a)`` >>
-      EXISTS_TAC ``F`` >>
-      EXISTS_TAC ``shift b3 mr3 (x : 'a)`` >>
-      EXISTS_TAC ``F`` >>
+      RW_TAC (bool_ss ++ QI_ss) [] >>
       ASM_SIMP_TAC bool_ss [SHIFT_LE]
       (* It's odd that METIS isn't able to deal with this *)
     ]) >>
