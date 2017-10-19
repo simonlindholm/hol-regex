@@ -220,7 +220,13 @@ val ACCEPT_CORRECT = store_thm ("ACCEPT_CORRECT",
 (** Definition of a marked regex, on which the optimized-but-uncached regex
  * matcher operates **)
 
-val _ = Datatype `MReg = MEps | MSym bool 'a | MAlt MReg MReg | MSeq MReg MReg | MRep MReg`;
+val _ = Datatype `
+  MReg = MEps |
+    MSym bool 'a |
+    MAlt MReg MReg |
+    MSeq MReg MReg |
+    MRep MReg |
+    MInit bool MReg`;
 
 (** Optimized-but-uncached regex matcher. **)
 
@@ -229,25 +235,27 @@ val empty = Define `
   (empty (MSym _ (_ : 'a)) = F) ∧
   (empty (MAlt p q) = empty p ∨ empty q) ∧
   (empty (MSeq p q) = empty p ∧ empty q) ∧
-  (empty (MRep r) = T) `;
+  (empty (MRep r) = T) ∧
+  (empty (MInit _ r) = empty r)`;
 
 val final = Define `
   (final MEps = F) ∧
   (final (MSym b (_ : 'a)) = b) ∧
   (final (MAlt p q) = final p ∨ final q) ∧
   (final (MSeq p q) = (final p ∧ empty q) ∨ final q) ∧
-  (final (MRep r) = final r) `;
+  (final (MRep r) = final r) ∧
+  (final (MInit b r) = (b ∧ empty r) ∨ final r)`;
 
 val shift = Define `
   (shift _ MEps _ = MEps) ∧
   (shift m (MSym _ x) c = MSym (m ∧ (x = c)) x) ∧
   (shift m (MAlt p q) c = MAlt (shift m p c) (shift m q c)) ∧
   (shift m (MSeq p q) c = MSeq (shift m p c) (shift ((m ∧ empty p) ∨ final p) q c)) ∧
-  (shift m (MRep r) c = MRep (shift (m ∨ final r) r c)) `;
+  (shift m (MRep r) c = MRep (shift (m ∨ final r) r c)) ∧
+  (shift m (MInit b r) c = MInit F (shift (m ∨ b) r c))`;
 
 val acceptM = Define `
-  (acceptM r ([] : 'a list) = empty r) ∧
-  (acceptM r (c :: cs) = final (FOLDL (shift F) (shift T r c) cs)) `;
+  acceptM mr (s : 'a list) = final (FOLDL (shift F) (MInit T mr) s)`;
 
 val mark_reg = Define `
   (mark_reg Eps = MEps) ∧
@@ -270,6 +278,7 @@ val mark_le = Define `
   (mark_le (MAlt p q) (MAlt mp mq) = mark_le p mp ∧ mark_le q mq) ∧
   (mark_le (MSeq p q) (MSeq mp mq) = mark_le p mp ∧ mark_le q mq) ∧
   (mark_le (MRep r) (MRep mr) = mark_le r mr) ∧
+  (mark_le (MInit b1 r) (MInit b2 mr) = (b1 ⇒ b2) ∧ mark_le r mr) ∧
   (mark_le _ _ = F) `;
 
 val accept2 = Define `accept2 r l = acceptM (mark_reg r) l`;
@@ -314,11 +323,11 @@ val SHIFT_IS_MARKED = store_thm ("SHIFT_IS_MARKED",
   REPEAT STRIP_TAC >>
   FULL_SIMP_TAC bool_ss [shift, is_marked_reg]);
 
-val ACCEPT_ALT_WEAKENING1 = store_thm ("ACCEPT_ALT_WEAKENING1",
+val ACCEPTM_ALT1 = store_thm ("ACCEPTM_ALT1",
   ``∀ p q (li : 'a list). acceptM p li ⇒ acceptM (MAlt p q) li``,
   cheat);
 
-val ACCEPT_ALT_WEAKENING2 = store_thm ("ACCEPT_ALT_WEAKENING2",
+val ACCEPTM_ALT2 = store_thm ("ACCEPTM_ALT2",
   ``∀ p q (li : 'a list). acceptM q li ⇒ acceptM (MAlt p q) li``,
   cheat);
 
@@ -328,10 +337,6 @@ val EMPTY_SOUND = store_thm ("EMPTY_SOUND",
 
 val EMPTY_COMPLETE = store_thm ("EMPTY_COMPLETE",
   ``∀ r (mr : 'a MReg). [] ∈ language_of r ∧ is_marked_reg r mr ⇒ empty mr``,
-  cheat);
-
-val ACCEPT_SEQ_EMPTY1 = store_thm ("ACCEPT_SEQ_EMPTY1",
-  ``∀ p q (li : 'a list). empty p ∧ acceptM q li ⇒ acceptM (MSeq p q) li``,
   cheat);
 
 val MARK_LE_REFL = store_thm ("MARK_LE_REFL",
@@ -351,14 +356,7 @@ val EMPTY_LE = store_thm ("EMPTY_LE",
   METIS_TAC[]);
 
 val FINAL_LE = store_thm ("FINAL_LE",
-  ``∀ r (s : 'a MReg). mark_le r s ⇒ final r ⇒ final s``,
-  Induct >> Cases_on `s` >>
-  REPEAT STRIP_TAC >>
-  FULL_SIMP_TAC bool_ss[mark_le, final] >>
-  METIS_TAC [EMPTY_LE]);
-
-val FINAL_LE = store_thm ("FINAL_LE",
-  ``∀ r (s : 'a MReg). mark_le r s ⇒ final r ⇒ final s``,
+  ``∀ r (s : 'a MReg). mark_le r s ∧ final r ⇒ final s``,
   Induct >> Cases_on `s` >>
   REPEAT STRIP_TAC >>
   FULL_SIMP_TAC bool_ss[mark_le, final] >>
@@ -376,113 +374,102 @@ val SHIFT_LE = store_thm ("SHIFT_LE",
     Cases_on `b1` >> Cases_on `b2` >>
     FULL_SIMP_TAC bool_ss []);
 
+val MARK_REG_LE = store_thm ("MARK_REG_LE",
+  ``∀ r (mr : 'a MReg). is_marked_reg r mr ⇒ mark_le (mark_reg r) mr``,
+  Induct >> Cases_on `mr` >>
+  REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg, mark_reg, mark_le]);
+
+val IS_MARKED_REG_LE = store_thm ("IS_MARKED_REG_LE",
+  ``∀ r mr (ms : 'a MReg). is_marked_reg r mr ∧ mark_le mr ms ⇒ is_marked_reg r ms``,
+  Induct >> Cases_on `mr` >> Cases_on `ms` >>
+  ASM_SIMP_TAC bool_ss [is_marked_reg, mark_le] >>
+  METIS_TAC []);
+
 (** Equivalence with language **)
 
-val ACCEPTM_IN_LANG = prove (
-  ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
+val ACCEPTM_REP_APPEND = prove (
+  ``∀ r x (y : 'a list).
+    acceptM (MRep (mark_reg r)) x ∧ acceptM (mark_reg r) y ⇒
+      acceptM (MRep (mark_reg r)) (x ++ y)``,
+  REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC list_ss [acceptM, FOLDL_APPEND] >>
+
+  `∃ mr b. mark_le (mark_reg r) mr ∧
+    (MInit b (MRep mr) = FOLDL (shift F) (MInit T (MRep (mark_reg r))) x)` by (
+    ID_SPEC_TAC ``x : 'a list`` >>
+    INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+      ASM_SIMP_TAC list_ss [] >>
+      METIS_TAC [MARK_LE_REFL],
+
+      STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
+      PAT_X_ASSUM ``MInit b (MRep mr) = _`` (ASSUME_TAC o GSYM) >>
+      FULL_SIMP_TAC list_ss [shift] >>
+      METIS_TAC [MARK_REG_LE, SHIFT_IS_MARKED, MARK_IS_MARKED, IS_MARKED_REG_LE]
+    ]) >>
+
+  PAT_X_ASSUM ``MInit b (MRep mr) = _`` (ASSUME_TAC o GSYM) >>
+  FULL_SIMP_TAC list_ss [] >>
+  WEAKEN_TAC is_eq >>
+
+  `∃ mr2 b2 mr3 b3. mark_le mr3 mr2 ∧ (b3 ⇒ b2 ∨ final mr2) ∧
+    ((MInit b3 mr3) = FOLDL (shift F) (MInit T (mark_reg r)) y) ∧
+    (MInit b2 (MRep mr2) = FOLDL (shift F) (MInit b (MRep mr)) y)` by (
+    ID_SPEC_TAC ``y : 'a list`` >>
+    INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+      ASM_SIMP_TAC list_ss [] >>
+      METIS_TAC [final],
+
+      STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
+      PAT_X_ASSUM ``MInit b2 (MRep mr2) = _`` (ASSUME_TAC o GSYM) >>
+      FULL_SIMP_TAC list_ss [shift] >>
+      PAT_X_ASSUM ``MInit b3 mr3 = _`` (ASSUME_TAC o GSYM) >>
+      FULL_SIMP_TAC list_ss [shift] >>
+
+      REPEAT (WEAKEN_TAC is_eq) >>
+      EXISTS_TAC ``shift (b2 ∨ final mr2) mr2 (x : 'a)`` >>
+      EXISTS_TAC ``F`` >>
+      EXISTS_TAC ``shift b3 mr3 (x : 'a)`` >>
+      EXISTS_TAC ``F`` >>
+      ASM_SIMP_TAC bool_ss [SHIFT_LE]
+      (* It's odd that METIS isn't able to deal with this *)
+    ]) >>
+
+  METIS_TAC [final, empty, FINAL_LE]);
+
+val ACCEPTM_REP = prove (
+  ``∀ r (li : 'a list list).
+    (∀ x. MEM x li ⇒ acceptM (mark_reg r) x) ⇒
+      acceptM (MRep (mark_reg r)) (FLAT li)``,
+  STRIP_TAC >>
+  INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+    FULL_SIMP_TAC list_ss [acceptM, empty, final],
+    FULL_SIMP_TAC list_ss [FLAT_SNOC, ACCEPTM_REP_APPEND]
+  ]);
+
+val ACCEPTM_SEQ = prove (
+  ``∀ ra rb x (y : 'a list).
+    acceptM (mark_reg ra) x ∧ acceptM (mark_reg rb) y ⇒
+      acceptM (MSeq (mark_reg ra) (mark_reg rb)) (x ++ y)``,
   cheat);
 
 val LANG_IN_ACCEPTM = prove (
   ``∀ (r : 'a Reg) w. w ∈ (language_of r) ⇒ acceptM (mark_reg r) w``,
-
-  `∀ (r : 'a Reg) mr w.
-    w ∈ (language_of r) ∧ is_marked_reg r mr ⇒ acceptM mr w`
-      suffices_by METIS_TAC[MARK_IS_MARKED] >>
-
-  Induct >> Cases_on `mr` >>
-  FULL_SIMP_TAC bool_ss [is_marked_reg, language_of] >>
+  Induct >>
+  FULL_SIMP_TAC bool_ss [mark_reg, is_marked_reg, language_of] >>
   REPEAT STRIP_TAC >| [
-    (* Eps *)
-    Cases_on `w` >>
-    FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty],
-
-    (* Sym *)
-    Cases_on `w` >>
+    FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final],
     FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final, shift],
-
-    (* Alt *)
-    FULL_SIMP_TAC list_ss [IN_UNION] >>
-    METIS_TAC [ACCEPT_ALT_WEAKENING1, ACCEPT_ALT_WEAKENING2],
-
-    (* Seq *)
-    (* XXX rename1 *)
-    Q.RENAME1_TAC `acceptM (MSeq mp mq) w` >>
-    Q.RENAME1_TAC `is_marked_reg p mp` >>
-    Q.RENAME1_TAC `is_marked_reg q mq` >>
-    FULL_SIMP_TAC set_ss [] >>
-    Cases_on `x` >| [
-      FULL_SIMP_TAC list_ss [] >>
-      `empty mp` by METIS_TAC [EMPTY_COMPLETE] >>
-      `acceptM mq y` by ASM_SIMP_TAC bool_ss [] >>
-      ASM_SIMP_TAC bool_ss [ACCEPT_SEQ_EMPTY1],
-
-      `acceptM mp (h::t)` by ASM_SIMP_TAC bool_ss [] >>
-      FULL_SIMP_TAC list_ss [acceptM, FOLDL_APPEND] >>
-
-      (* Step 1: the first FOLDL over t is accepted by the left half *)
-      `∃ mq2. (FOLDL (shift F) (shift T (MSeq mp mq) h) t =
-        MSeq (FOLDL (shift F) (shift T mp h) t) mq2) ∧
-            is_marked_reg q mq2`
-        by (
-          ID_SPEC_TAC ``(t : 'a list)`` >>
-          INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
-            REPEAT STRIP_TAC >>
-            ASM_SIMP_TAC list_ss [shift] >>
-            EXISTS_TAC ``shift (empty (mp : 'a MReg) ∨ final mp) mq (h : 'a)`` >>
-            ASM_SIMP_TAC bool_ss [SHIFT_IS_MARKED],
-
-            REPEAT STRIP_TAC >>
-            FULL_SIMP_TAC list_ss [shift, FOLDL_SNOC] >>
-            EXISTS_TAC ``shift (final (FOLDL (shift F) (shift T mp (h : 'a)) t')) (mq2 : 'a MReg) x`` >>
-            ASM_SIMP_TAC list_ss [SHIFT_IS_MARKED]
-          ]) >>
-
-      (* Step 1.5: Clean up remains of step 1 -- the left half is now irrelevant *)
-      (* XXX Use Q.ABBREV_TAC *)
-      FULL_SIMP_TAC bool_ss [] >>
-      `acceptM mq2 y` by ASM_SIMP_TAC bool_ss [] >>
-
-      `∃ half. FOLDL (shift F) (shift T mp h) t = half` by ASM_SIMP_TAC bool_ss [] >>
-      FULL_SIMP_TAC bool_ss [] >>
-      REPEAT (WEAKEN_TAC is_eq) >>
-      REPEAT (WEAKEN_TAC is_forall) >>
-      REPEAT (WEAKEN_TAC is_IN) >>
-      REPEAT (WEAKEN_TAC (has_subterm
-        (equal ``is_marked_reg : 'a Reg -> 'a MReg -> bool``))) >>
-
-      (* Step 2: the second FOLDL over y is accepted by the right half *)
-      Cases_on `y` >| [
-        FULL_SIMP_TAC list_ss [final, shift, acceptM],
-
-        FULL_SIMP_TAC list_ss [final, shift, acceptM] >>
-        WEAKEN_TAC (equal ``final (half : 'a MReg)``) >>
-
-        Q.ABBREV_TAC `mp = shift F half h` >>
-        `∃ mp2 mq3. (FOLDL (shift F) (MSeq mp (shift T mq2 h)) t =
-          MSeq mp2 mq3) ∧ mark_le (FOLDL (shift F) (shift T mq2 h) t) mq3`
-          suffices_by METIS_TAC[final, FINAL_LE] >>
-
-        REPEAT (WEAKEN_TAC (K true)) >>
-
-        ID_SPEC_TAC ``(t : 'a list)`` >>
-        INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
-          FULL_SIMP_TAC list_ss [] >>
-          EXISTS_TAC ``mp : 'a MReg`` >>
-          EXISTS_TAC ``(shift T mq2 h) : 'a MReg`` >>
-          FULL_SIMP_TAC list_ss [MARK_LE_REFL],
-
-          STRIP_TAC >>
-          FULL_SIMP_TAC list_ss [shift, FOLDL_SNOC] >>
-          EXISTS_TAC ``(shift F mp2 x) : 'a MReg`` >>
-          EXISTS_TAC ``(shift (final (mp2 : 'a MReg)) mq3 x) : 'a MReg`` >>
-          METIS_TAC [MARK_LE_TRANS, SHIFT_LE]
-        ]
-      ]
-    ],
-
-    (* Rep *)
-    cheat
+    FULL_SIMP_TAC list_ss [IN_UNION, ACCEPTM_ALT1, ACCEPTM_ALT2],
+    FULL_SIMP_TAC set_ss [ACCEPTM_SEQ],
+    FULL_SIMP_TAC set_ss [ACCEPTM_REP]
   ]);
+
+val ACCEPTM_IN_LANG = prove (
+  ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
+  cheat);
 
 val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇔ w ∈ (language_of r)``,
