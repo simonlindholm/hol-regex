@@ -281,9 +281,9 @@ val mark_le = Define `
   (mark_le (MInit b1 r) (MInit b2 mr) = (b1 ⇒ b2) ∧ mark_le r mr) ∧
   (mark_le _ _ = F) `;
 
-val accept2 = Define `accept2 r l = acceptM (mark_reg r) l`;
-
 (** Some tests **)
+
+val _ = Define `accept2 r l = acceptM (mark_reg r) l`;
 
 val _ = assert_true ``empty (MAlt MEps (MEps : 'a MReg))``;
 val _ = assert_true ``empty (MAlt MEps (MSym T 2))``;
@@ -453,7 +453,47 @@ val ACCEPTM_SEQ = prove (
   ``∀ ra rb x (y : 'a list).
     acceptM (mark_reg ra) x ∧ acceptM (mark_reg rb) y ⇒
       acceptM (MSeq (mark_reg ra) (mark_reg rb)) (x ++ y)``,
-  cheat);
+  REPEAT STRIP_TAC >>
+  FULL_SIMP_TAC list_ss [acceptM, FOLDL_APPEND] >>
+
+  `∃ ma mb b. mark_le (mark_reg ra) ma ∧ mark_le (mark_reg rb) mb ∧
+    (FOLDL (shift F) (MInit T (mark_reg ra)) x = MInit b ma) ∧
+    (FOLDL (shift F) (MInit T (MSeq (mark_reg ra) (mark_reg rb))) x = MInit b (MSeq ma mb))` by (
+    ID_SPEC_TAC ``x : 'a list`` >>
+    INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+      ASM_SIMP_TAC list_ss [] >>
+      METIS_TAC [MARK_LE_REFL],
+
+      STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [FOLDL_SNOC, shift] >>
+      REPEAT (WEAKEN_TAC is_eq) >>
+
+      EXISTS_TAC ``shift b ma (x'' : 'a)`` >>
+      EXISTS_TAC ``shift (b ∧ empty ma ∨ final (ma : 'a MReg)) mb (x'' : 'a)`` >>
+      EXISTS_TAC ``F`` >>
+      METIS_TAC [MARK_REG_LE, SHIFT_IS_MARKED, MARK_IS_MARKED, IS_MARKED_REG_LE]
+    ]) >>
+
+  FULL_SIMP_TAC list_ss [] >>
+  REPEAT (WEAKEN_TAC is_eq) >>
+
+  `∃ rb2 b2 ma2 mb2 b3. mark_le rb2 mb2 ∧ (b2 ⇒ b3 ∧ empty ma2 ∨ final ma2) ∧
+    (FOLDL (shift F) (MInit T (mark_reg rb)) y = MInit b2 rb2) ∧
+    (FOLDL (shift F) (MInit b (MSeq ma mb)) y = MInit b3 (MSeq ma2 mb2))` by (
+    ID_SPEC_TAC ``y : 'a list`` >>
+    INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+      ASM_SIMP_TAC list_ss [] >>
+      RW_TAC (bool_ss ++ QI_ss) [] >>
+      FULL_SIMP_TAC bool_ss [final],
+
+      STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [FOLDL_SNOC, shift] >>
+      REPEAT (WEAKEN_TAC is_eq) >>
+
+      RW_TAC (bool_ss ++ QI_ss) [SHIFT_LE]
+    ]) >>
+
+  METIS_TAC [final, empty, FINAL_LE, EMPTY_LE]);
 
 val LANG_IN_ACCEPTM = prove (
   ``∀ (r : 'a Reg) w. w ∈ (language_of r) ⇒ acceptM (mark_reg r) w``,
