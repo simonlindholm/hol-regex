@@ -513,9 +513,25 @@ val LANG_IN_ACCEPTM = prove (
     FULL_SIMP_TAC set_ss [ACCEPTM_REP]
   ]);
 
+val ACCEPTM_SEQ_SOUND = store_thm ("ACCEPTM_SEQ_SOUND",
+  ``∀ w b mr (r : 'a Reg).
+  final (FOLDL (shift F) (MInit b (MSeq mr (mark_reg r))) w) ⇒
+    ∃ x y. (w = x ++ y) ∧
+      final (FOLDL (shift F) (MInit b mr) x) ∧
+      acceptM (mark_reg r) y``,
+  cheat);
+
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
-  cheat);
+  Induct >>
+  FULL_SIMP_TAC bool_ss [language_of, IN_SING] >>
+  REPEAT STRIP_TAC >| [
+    cheat,
+    cheat,
+    cheat,
+    cheat,
+    cheat
+  ]);
 
 val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇔ w ∈ (language_of r)``,
