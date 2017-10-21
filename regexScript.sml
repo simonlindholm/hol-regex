@@ -281,6 +281,14 @@ val mark_le = Define `
   (mark_le (MInit b1 r) (MInit b2 mr) = (b1 ⇒ b2) ∧ mark_le r mr) ∧
   (mark_le _ _ = F) `;
 
+val mark_union = Define `
+  (mark_union MEps MEps = MEps) ∧
+  (mark_union (MSym ma (c : 'a)) (MSym mb _) = MSym (ma ∨ mb) c) ∧
+  (mark_union (MAlt p q) (MAlt mp mq) = MAlt (mark_union p mp) (mark_union q mq)) ∧
+  (mark_union (MSeq p q) (MSeq mp mq) = MSeq (mark_union p mp) (mark_union q mq)) ∧
+  (mark_union (MRep ma) (MRep mb) = MRep (mark_union ma mb)) ∧
+  (mark_union (MInit b1 ma) (MInit b2 mb) = MInit (b1 ∨ b2) (mark_union ma mb))`;
+
 (** Some tests **)
 
 val _ = Define `accept2 r l = acceptM (mark_reg r) l`;
@@ -392,6 +400,34 @@ val MARK_REG_NOT_FINAL = store_thm ("MARK_REG_NOT_FINAL",
 val SHIFT_MARK_REG_F = store_thm ("SHIFT_MARK_REG_F",
   ``∀ (r : 'a Reg) c. shift F (mark_reg r) c = mark_reg r``,
   Induct >> FULL_SIMP_TAC bool_ss [mark_reg, shift, MARK_REG_NOT_FINAL]);
+
+val MARK_UNION_MARKED = store_thm ("MARK_UNION_MARKED",
+  ``∀ (r : 'a Reg) ma mb.
+    is_marked_reg r ma ∧ is_marked_reg r mb ⇒ is_marked_reg r (mark_union ma mb)``,
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  Cases_on `mb` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg, mark_union]);
+
+val IS_MARKED_EMPTY = store_thm ("IS_MARKED_EMPTY",
+  ``∀ (r : 'a Reg) ma mb.
+    is_marked_reg r ma ∧ is_marked_reg r mb ⇒ (empty ma = empty mb)``,
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  Cases_on `mb` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg, empty] >>
+  METIS_TAC[]);
+
+val MARK_UNION_FINAL = store_thm ("MARK_UNION_FINAL",
+  ``∀ (r : 'a Reg) ma mb.
+    is_marked_reg r ma ∧ is_marked_reg r mb ∧ final (mark_union ma mb) ⇒
+    final ma ∨ final mb``,
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  Cases_on `mb` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  FULL_SIMP_TAC bool_ss [mark_union, final] >>
+  METIS_TAC[IS_MARKED_EMPTY, MARK_UNION_MARKED]);
 
 (** Equivalence with language **)
 
