@@ -101,7 +101,7 @@ val SPLIT_COMPLETE = store_thm ("SPLIT_COMPLETE",
           ) >>
     ASM_SIMP_TAC list_ss[MEM_MAP] >>
     REPEAT STRIP_TAC >>
-    EXISTS_TAC ``(a : 'a list, b : 'a list)`` >>
+    Q.EXISTS_TAC `(a, b)` >>
     ASM_SIMP_TAC bool_ss []
   ]);
 
@@ -130,15 +130,15 @@ val PARTS_IN_FLAT = store_thm ("PARTS_IN_FLAT",
   ``∀ li. ∃ part. MEM part (parts (FLAT li)) ∧
     ∀ (x : 'a list). MEM x part ⇒ MEM x li``,
   Induct >| [
-    EXISTS_TAC ``[] : 'a list list`` >>
+    Q.EXISTS_TAC `[]` >>
     ASM_SIMP_TAC list_ss [FLAT, parts],
 
     FULL_SIMP_TAC bool_ss [] >>
     Cases >| [
-      EXISTS_TAC ``part : 'a list list`` >>
+      Q.EXISTS_TAC `part` >>
       ASM_SIMP_TAC list_ss [],
 
-      EXISTS_TAC ``((h'::t) :: part) : 'a list list`` >>
+      Q.EXISTS_TAC `((h'::t) :: part)` >>
       REPEAT STRIP_TAC >| [
         WEAKEN_TAC is_forall >>
         ASM_SIMP_TAC list_ss [] >>
@@ -148,7 +148,7 @@ val PARTS_IN_FLAT = store_thm ("PARTS_IN_FLAT",
         FULL_SIMP_TAC bool_ss[] >>
         WEAKEN_TAC is_eq >>
 
-        ID_SPEC_TAC ``h' : 'a`` >>
+        Q.ID_SPEC_TAC `h'` >>
         Induct_on `t` >| [
           ASM_SIMP_TAC list_ss [] >>
           Cases_on `rest` >>
@@ -171,7 +171,7 @@ val ACCEPT_SEQ_CONCAT = store_thm ("ACCEPT_SEQ_CONCAT",
     accept p u ∧ accept q v ⇒ accept (Seq p q) (u ++ v)``,
   REPEAT STRIP_TAC >>
   SIMP_TAC list_ss [accept, EXISTS_MEM] >>
-  EXISTS_TAC ``(u : 'a list, v : 'a list)`` >>
+  Q.EXISTS_TAC `(u, v)` >>
   ASM_SIMP_TAC std_ss [SPLIT_COMPLETE]);
 
 val ACCEPT_REP_NIL = store_thm ("ACCEPT_REP_NIL",
@@ -189,12 +189,12 @@ val ACCEPT_IN_LANG = prove (
     Cases_on `w` >> FULL_SIMP_TAC list_ss [],
 
     FULL_SIMP_TAC (std_ss ++ gen_beta_ss) [EXISTS_MEM] >>
-    EXISTS_TAC ``FST (e : 'a list # 'a list)`` >>
-    EXISTS_TAC ``SND (e : 'a list # 'a list)`` >>
+    Q.EXISTS_TAC `FST e` >>
+    Q.EXISTS_TAC `SND e` >>
     ASM_SIMP_TAC std_ss [SPLIT_SOUND],
 
     FULL_SIMP_TAC std_ss [EXISTS_MEM, EVERY_MEM] >>
-    EXISTS_TAC ``e : 'a list list`` >>
+    Q.EXISTS_TAC `e` >>
     FULL_SIMP_TAC std_ss [PARTS_SOUND]
   ]);
 
@@ -207,7 +207,7 @@ val LANG_IN_ACCEPT = prove (
     `∃ part. MEM part (parts (FLAT li)) ∧ ∀ x. (MEM x part ⇒ MEM x li)`
       by REWRITE_TAC [PARTS_IN_FLAT] >>
     SIMP_TAC list_ss [EXISTS_MEM] >>
-    EXISTS_TAC ``(part : 'a list list)`` >>
+    Q.EXISTS_TAC `part` >>
     ASM_SIMP_TAC std_ss [EVERY_MEM]
   ]);
 
@@ -337,7 +337,7 @@ val EMPTY_SOUND = store_thm ("EMPTY_SOUND",
   REPEAT STRIP_TAC >>
   FULL_SIMP_TAC (list_ss ++ SET_SPEC_ss ++ QI_ss)
     [empty, is_marked_reg, language_of, IN_SING] >>
-  EXISTS_TAC ``[] : 'a list list`` >>
+  Q.EXISTS_TAC `[]` >>
   SIMP_TAC list_ss []);
 
 val EMPTY_COMPLETE = store_thm ("EMPTY_COMPLETE",
@@ -439,7 +439,7 @@ val ACCEPTM_ALT = store_thm ("ACCEPTM_ALT",
     (FOLDL (shift F) (MInit T p) li = MInit b mp) ∧
     (FOLDL (shift F) (MInit T q) li = MInit b mq) ∧
     (FOLDL (shift F) (MInit T (MAlt p q)) li = MInit b (MAlt mp mq))` by (
-    ID_SPEC_TAC ``li : 'a list`` >>
+    Q.ID_SPEC_TAC `li` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [MARK_LE_REFL],
@@ -458,7 +458,7 @@ val ACCEPTM_REP_APPEND = prove (
 
   `∃ mr b. mark_le (mark_reg r) mr ∧
     (FOLDL (shift F) (MInit T (MRep (mark_reg r))) x = MInit b (MRep mr))` by (
-    ID_SPEC_TAC ``x : 'a list`` >>
+    Q.ID_SPEC_TAC `x` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [MARK_LE_REFL],
@@ -474,7 +474,7 @@ val ACCEPTM_REP_APPEND = prove (
   `∃ mr2 b2 mr3 b3. mark_le mr3 mr2 ∧ (b3 ⇒ b2 ∨ final mr2) ∧
     (FOLDL (shift F) (MInit T (mark_reg r)) y = (MInit b3 mr3)) ∧
     (FOLDL (shift F) (MInit b (MRep mr)) y = MInit b2 (MRep mr2))` by (
-    ID_SPEC_TAC ``y : 'a list`` >>
+    Q.ID_SPEC_TAC `y` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [final],
@@ -509,7 +509,7 @@ val ACCEPTM_SEQ = prove (
   `∃ ma mb b. mark_le (mark_reg ra) ma ∧ mark_le (mark_reg rb) mb ∧
     (FOLDL (shift F) (MInit T (mark_reg ra)) x = MInit b ma) ∧
     (FOLDL (shift F) (MInit T (MSeq (mark_reg ra) (mark_reg rb))) x = MInit b (MSeq ma mb))` by (
-    ID_SPEC_TAC ``x : 'a list`` >>
+    Q.ID_SPEC_TAC `x` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       METIS_TAC [MARK_LE_REFL],
@@ -518,9 +518,9 @@ val ACCEPTM_SEQ = prove (
       FULL_SIMP_TAC list_ss [FOLDL_SNOC, shift] >>
       REPEAT (WEAKEN_TAC is_eq) >>
 
-      EXISTS_TAC ``shift b ma (x'' : 'a)`` >>
-      EXISTS_TAC ``shift (b ∧ empty ma ∨ final (ma : 'a MReg)) mb (x'' : 'a)`` >>
-      EXISTS_TAC ``F`` >>
+      Q.EXISTS_TAC `shift b ma x''` >>
+      Q.EXISTS_TAC `shift (b ∧ empty ma ∨ final ma) mb x''` >>
+      Q.EXISTS_TAC `F` >>
       METIS_TAC [MARK_REG_LE, SHIFT_IS_MARKED, MARK_IS_MARKED, IS_MARKED_REG_LE]
     ]) >>
 
@@ -530,7 +530,7 @@ val ACCEPTM_SEQ = prove (
   `∃ rb2 b2 ma2 mb2 b3. mark_le rb2 mb2 ∧ (b2 ⇒ b3 ∧ empty ma2 ∨ final ma2) ∧
     (FOLDL (shift F) (MInit T (mark_reg rb)) y = MInit b2 rb2) ∧
     (FOLDL (shift F) (MInit b (MSeq ma mb)) y = MInit b3 (MSeq ma2 mb2))` by (
-    ID_SPEC_TAC ``y : 'a list`` >>
+    Q.ID_SPEC_TAC `y` >>
     INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
       ASM_SIMP_TAC list_ss [] >>
       RW_TAC (bool_ss ++ QI_ss) [] >>
@@ -595,8 +595,8 @@ val ACCEPTM_SEQ_SOUND = store_thm ("ACCEPTM_SEQ_SOUND",
           acceptM (mark_reg r) y`
         by (ASM_SIMP_TAC bool_ss []) >>
       WEAKEN_TAC is_forall >>
-      EXISTS_TAC ``(h : 'a) :: x`` >>
-      EXISTS_TAC ``y : 'a list`` >>
+      Q.EXISTS_TAC `h :: x` >>
+      Q.EXISTS_TAC `y` >>
       FULL_SIMP_TAC list_ss [shift]
     ]
   ]);
