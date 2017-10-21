@@ -331,6 +331,13 @@ val SHIFT_IS_MARKED = store_thm ("SHIFT_IS_MARKED",
   REPEAT STRIP_TAC >>
   FULL_SIMP_TAC bool_ss [shift, is_marked_reg]);
 
+val FOLDL_SHIFT_IS_MARKED = prove (
+  ``∀ (r : 'a Reg) mr m w.
+    is_marked_reg r mr ⇒ is_marked_reg r (FOLDL (shift F) mr w)``,
+  NTAC 3 STRIP_TAC >>
+  INDUCT_THEN SNOC_INDUCT ASSUME_TAC >>
+  FULL_SIMP_TAC bool_ss [FOLDL, FOLDL_SNOC, SHIFT_IS_MARKED]);
+
 val EMPTY_SOUND = store_thm ("EMPTY_SOUND",
   ``∀ r (mr : 'a MReg). empty mr ∧ is_marked_reg r mr ⇒ [] ∈ language_of r``,
   Induct >> Cases_on `mr` >>
@@ -401,6 +408,14 @@ val SHIFT_MARK_REG_F = store_thm ("SHIFT_MARK_REG_F",
   ``∀ (r : 'a Reg) c. shift F (mark_reg r) c = mark_reg r``,
   Induct >> FULL_SIMP_TAC bool_ss [mark_reg, shift, MARK_REG_NOT_FINAL]);
 
+val FOLDL_MINIT_F = store_thm ("FOLDL_MINIT_F",
+  ``∀ w (mr : 'a MReg).
+    FOLDL (shift F) (MInit F mr) w = MInit F (FOLDL (shift F) mr w)``,
+  INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+    SIMP_TAC list_ss [],
+    ASM_SIMP_TAC list_ss [FOLDL_SNOC, shift]
+  ]);
+
 val MARK_UNION_MARKED = store_thm ("MARK_UNION_MARKED",
   ``∀ (r : 'a Reg) ma mb.
     is_marked_reg r ma ∧ is_marked_reg r mb ⇒ is_marked_reg r (mark_union ma mb)``,
@@ -420,14 +435,61 @@ val IS_MARKED_EMPTY = store_thm ("IS_MARKED_EMPTY",
 
 val MARK_UNION_FINAL = store_thm ("MARK_UNION_FINAL",
   ``∀ (r : 'a Reg) ma mb.
-    is_marked_reg r ma ∧ is_marked_reg r mb ∧ final (mark_union ma mb) ⇒
-    final ma ∨ final mb``,
+    is_marked_reg r ma ∧ is_marked_reg r mb ⇒
+    (final (mark_union ma mb) = final ma ∨ final mb)``,
   Induct >> Cases_on `ma` >>
   FULL_SIMP_TAC bool_ss [is_marked_reg] >>
   Cases_on `mb` >>
   FULL_SIMP_TAC bool_ss [is_marked_reg] >>
   FULL_SIMP_TAC bool_ss [mark_union, final] >>
   METIS_TAC[IS_MARKED_EMPTY, MARK_UNION_MARKED]);
+
+val MARK_UNION_EMPTY = store_thm ("MARK_UNION_EMPTY",
+  ``∀ (r : 'a Reg) ma mb.
+    is_marked_reg r ma ∧ is_marked_reg r mb ⇒
+    (empty (mark_union ma mb) = empty ma)``,
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  Cases_on `mb` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  FULL_SIMP_TAC bool_ss [mark_union, empty]);
+
+val MARK_UNION_ID = store_thm ("MARK_UNION_ID",
+  ``∀ (r : 'a Reg) ma.
+    is_marked_reg r ma ⇒ (mark_union (mark_reg r) ma = ma)``,
+  cheat);
+
+val MARK_UNION_SHIFT = store_thm ("MARK_UNION_SHIFT",
+  ``∀ (r : 'a Reg) ma mb b1 b2 c.
+    is_marked_reg r ma ∧ is_marked_reg r mb ⇒
+    (mark_union (shift b1 ma c) (shift b2 mb c) = shift (b1 ∨ b2) (mark_union ma mb) c)``,
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  Cases_on `mb` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg] >>
+  REPEAT STRIP_TAC >| [
+    FULL_SIMP_TAC bool_ss [mark_union, shift],
+
+    FULL_SIMP_TAC bool_ss [mark_union, shift] >>
+    Cases_on `b1` >> Cases_on `b2` >> Cases_on `a' = c` >> SIMP_TAC bool_ss [],
+
+    FULL_SIMP_TAC bool_ss [mark_union, shift],
+
+    (* This is *terrible*. Is there no solver that handles booleans better?
+     * Or at least is able to do boolean rewrites? *)
+    FULL_SIMP_TAC bool_ss [mark_union, shift] >>
+    RW_TAC bool_ss [] >>
+    `empty (mark_union M M') = empty M` by METIS_TAC [MARK_UNION_EMPTY] >>
+    `empty M' = empty M` by METIS_TAC [IS_MARKED_EMPTY] >>
+    `final (mark_union M M') = final M ∨ final M'` by METIS_TAC [MARK_UNION_FINAL] >>
+    ASM_SIMP_TAC bool_ss [] >>
+    Cases_on `b1` >> Cases_on `b2` >> Cases_on `empty M` >>
+    Cases_on `final M` >> Cases_on `final M'` >> ASM_SIMP_TAC bool_ss [],
+
+    FULL_SIMP_TAC bool_ss [mark_union, shift] >>
+    RW_TAC bool_ss [MARK_UNION_FINAL] >>
+    cheat
+  ]);
 
 (** Equivalence with language **)
 
@@ -557,7 +619,7 @@ val LANG_IN_ACCEPTM = prove (
     FULL_SIMP_TAC set_ss [ACCEPTM_REP]
   ]);
 
-val ACCEPTM_SEQ_SOUND = store_thm ("ACCEPTM_SEQ_SOUND",
+val ACCEPTM_SEQ_SOUND = prove (
   ``∀ w b mr (r : 'a Reg).
   final (FOLDL (shift F) (MInit b (MSeq mr (mark_reg r))) w) ⇒
     ∃ x y. (w = x ++ y) ∧
@@ -570,31 +632,68 @@ val ACCEPTM_SEQ_SOUND = store_thm ("ACCEPTM_SEQ_SOUND",
     REPEAT STRIP_TAC >>
     FULL_SIMP_TAC list_ss [FOLDL, shift] >>
 
-    Cases_on `(b ∧ empty mr ∨ final mr)` >| [
-      Q.ABBREV_TAC `ac = b ∧ empty mr ∨ final mr` >>
-      FULL_SIMP_TAC pure_ss [] >>
-      (* try x = [], y = h::w, but if it fails, we
-       * can use ind. hyp. (by reference to union lemma) *)
-      (* Claim:
+    Q.ABBREV_TAC `acleft = b ∧ empty mr ∨ final mr` >>
+    Q.ABBREV_TAC `right = (FOLDL (shift F) (shift T (mark_reg r) h) w)` >>
 
-      ∃ ma mb ma' mb'.
-      (FOLDL (shift F)
-        (MInit F (MSeq (shift b mr h) (shift T (mark_reg r) h))) w =
-      MInit F (MSeq ma mb)) ∧
-      (FOLDL (shift F)
-        (MInit F (MSeq (shift b mr h) (shift F (mark_reg r) h))) w =
-      MInit F (MSeq ma' mb')) ∧
-      (mb = mark_union mb' (FOLDL (shift F) (shift T (mark_reg r) h) w))
-      *)
-      cheat,
+    Cases_on `acleft ∧ final right` >| [
+      Q.EXISTS_TAC `[]` >>
+      Q.EXISTS_TAC `h :: w` >>
+      ASM_SIMP_TAC list_ss [final, acceptM, shift, FOLDL, FOLDL_MINIT_F],
 
-      FULL_SIMP_TAC pure_ss [] >>
-      WEAKEN_TAC (K true) >>
-      FULL_SIMP_TAC bool_ss [SHIFT_MARK_REG_F] >>
+      `final (FOLDL (shift F) (MInit F (MSeq (shift b mr h) (mark_reg r))) w)` by (
+        Cases_on `acleft` >| [
+          FULL_SIMP_TAC bool_ss [] >>
+          Q.UNABBREV_TAC `right` >>
+          Q.PAT_X_ASSUM `Abbrev _` kall_tac >>
+
+          `∃ ma mb mb'.
+          (FOLDL (shift F)
+            (MInit F (MSeq (shift b mr h) (shift T (mark_reg r) h))) w =
+          MInit F (MSeq ma mb)) ∧
+          (FOLDL (shift F)
+            (MInit F (MSeq (shift b mr h) (shift F (mark_reg r) h))) w =
+          MInit F (MSeq ma mb')) ∧
+          (mb = mark_union mb' (FOLDL (shift F) (shift T (mark_reg r) h) w)) ∧
+          is_marked_reg r mb' ` by (
+            REPEAT (WEAKEN_TAC (K true)) >>
+            Q.ID_SPEC_TAC `w` >>
+            INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+              SIMP_TAC list_ss [FOLDL] >>
+              Q.EXISTS_TAC `shift b mr h` >>
+              Q.EXISTS_TAC `shift F (mark_reg r) h` >>
+              SIMP_TAC bool_ss [SHIFT_MARK_REG_F, MARK_UNION_ID, MARK_IS_MARKED,
+                               SHIFT_IS_MARKED],
+
+              STRIP_TAC >>
+              FULL_SIMP_TAC list_ss [FOLDL, FOLDL_SNOC, shift] >>
+              Q.EXISTS_TAC `shift F ma x` >>
+              Q.EXISTS_TAC `shift (final ma) mb' x` >>
+              FULL_SIMP_TAC bool_ss [SHIFT_IS_MARKED] >>
+
+              `shift (final ma) (mark_union mb'
+                    (FOLDL (shift F) (shift T (mark_reg r) h) w)) x =
+                mark_union (shift (final ma) mb' x)
+                  (shift F (FOLDL (shift F) (shift T (mark_reg r) h) w) x)`
+                suffices_by SIMP_TAC bool_ss [] >>
+
+              Q.ABBREV_TAC `mb2 = FOLDL (shift F) (shift T (mark_reg r) h) w` >>
+              `is_marked_reg r mb2`
+                by FULL_SIMP_TAC bool_ss [MARK_IS_MARKED, SHIFT_IS_MARKED,
+                                          FOLDL_SHIFT_IS_MARKED, Abbr`mb2`] >>
+
+              (* XXX how do I use MARK_UNION_SHIFT??? *)
+              cheat
+            ]
+          ) >>
+
+          cheat,
+
+          FULL_SIMP_TAC bool_ss [SHIFT_MARK_REG_F]
+        ]) >>
+
       `∃ x y. (w = x ++ y) ∧ final (FOLDL (shift F) (MInit F (shift b mr h)) x) ∧
           acceptM (mark_reg r) y`
         by (ASM_SIMP_TAC bool_ss []) >>
-      WEAKEN_TAC is_forall >>
       Q.EXISTS_TAC `h :: x` >>
       Q.EXISTS_TAC `y` >>
       FULL_SIMP_TAC list_ss [shift]
