@@ -385,10 +385,18 @@ val IS_MARKED_REG_LE = store_thm ("IS_MARKED_REG_LE",
   ASM_SIMP_TAC bool_ss [is_marked_reg, mark_le] >>
   METIS_TAC []);
 
+val MARK_REG_NOT_FINAL = store_thm ("MARK_REG_NOT_FINAL",
+  ``∀ (r : 'a Reg). ¬final (mark_reg r)``,
+  Induct >> FULL_SIMP_TAC bool_ss [mark_reg, final]);
+
+val SHIFT_MARK_REG_F = store_thm ("SHIFT_MARK_REG_F",
+  ``∀ (r : 'a Reg) c. shift F (mark_reg r) c = mark_reg r``,
+  Induct >> FULL_SIMP_TAC bool_ss [mark_reg, shift, MARK_REG_NOT_FINAL]);
+
 (** Equivalence with language **)
 
 val ACCEPTM_ALT = store_thm ("ACCEPTM_ALT",
-  ``∀ p q (li : 'a list). (acceptM p li ∨ acceptM q li) ⇒ acceptM (MAlt p q) li``,
+  ``∀ p q (li : 'a list). (acceptM p li ∨ acceptM q li) ⇔ acceptM (MAlt p q) li``,
   NTAC 3 STRIP_TAC >>
   FULL_SIMP_TAC bool_ss [acceptM] >>
   `∃ mp mq b.
@@ -508,7 +516,7 @@ val LANG_IN_ACCEPTM = prove (
   REPEAT STRIP_TAC >| [
     FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final],
     FULL_SIMP_TAC list_ss [IN_SING, acceptM, empty, final, shift],
-    FULL_SIMP_TAC list_ss [IN_UNION, ACCEPTM_ALT],
+    METIS_TAC [IN_UNION, ACCEPTM_ALT],
     FULL_SIMP_TAC set_ss [ACCEPTM_SEQ],
     FULL_SIMP_TAC set_ss [ACCEPTM_REP]
   ]);
@@ -519,7 +527,43 @@ val ACCEPTM_SEQ_SOUND = store_thm ("ACCEPTM_SEQ_SOUND",
     ∃ x y. (w = x ++ y) ∧
       final (FOLDL (shift F) (MInit b mr) x) ∧
       acceptM (mark_reg r) y``,
-  cheat);
+  Induct >| [
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC (list_ss ++ QI_ss) [acceptM, final, empty, MARK_REG_NOT_FINAL],
+
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [FOLDL, shift] >>
+
+    Cases_on `(b ∧ empty mr ∨ final mr)` >| [
+      Q.ABBREV_TAC `ac = b ∧ empty mr ∨ final mr` >>
+      FULL_SIMP_TAC pure_ss [] >>
+      (* try x = [], y = h::w, but if it fails, we
+       * can use ind. hyp. (by reference to union lemma) *)
+      (* Claim:
+
+      ∃ ma mb ma' mb'.
+      (FOLDL (shift F)
+        (MInit F (MSeq (shift b mr h) (shift T (mark_reg r) h))) w =
+      MInit F (MSeq ma mb)) ∧
+      (FOLDL (shift F)
+        (MInit F (MSeq (shift b mr h) (shift F (mark_reg r) h))) w =
+      MInit F (MSeq ma' mb')) ∧
+      (mb = mark_union mb' (FOLDL (shift F) (shift T (mark_reg r) h) w))
+      *)
+      cheat,
+
+      FULL_SIMP_TAC pure_ss [] >>
+      WEAKEN_TAC (K true) >>
+      FULL_SIMP_TAC bool_ss [SHIFT_MARK_REG_F] >>
+      `∃ x y. (w = x ++ y) ∧ final (FOLDL (shift F) (MInit F (shift b mr h)) x) ∧
+          acceptM (mark_reg r) y`
+        by (ASM_SIMP_TAC bool_ss []) >>
+      WEAKEN_TAC is_forall >>
+      EXISTS_TAC ``(h : 'a) :: x`` >>
+      EXISTS_TAC ``y : 'a list`` >>
+      FULL_SIMP_TAC list_ss [shift]
+    ]
+  ]);
 
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
@@ -528,7 +572,10 @@ val ACCEPTM_IN_LANG = prove (
   REPEAT STRIP_TAC >| [
     cheat,
     cheat,
-    cheat,
+
+    FULL_SIMP_TAC set_ss [mark_reg, IN_UNION] >>
+    METIS_TAC [ACCEPTM_ALT],
+
     cheat,
     cheat
   ]);
