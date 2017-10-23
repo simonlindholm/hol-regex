@@ -709,19 +709,57 @@ val ACCEPTM_SEQ_SOUND = prove (
     ]
   ]);
 
-(*
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
   Induct >>
   FULL_SIMP_TAC bool_ss [language_of_def, IN_SING] >>
   REPEAT STRIP_TAC >| [
-    cheat,
-    cheat,
+    (* MEps *)
+    Cases_on `w` >- SIMP_TAC bool_ss [] >>
+    FULL_SIMP_TAC bool_ss [acceptM_def, shift_def, mark_reg_def, FOLDL] >>
+    `FOLDL (shift F) (MInit F MEps) t = MInit F MEps` by (
+      Induct_on `t` >| [
+        FULL_SIMP_TAC list_ss [],
+        FULL_SIMP_TAC list_ss [shift_def]
+      ]) >>
+    FULL_SIMP_TAC bool_ss [final_def],
 
+    (* MSym *)
+    Cases_on `w` >-
+      FULL_SIMP_TAC list_ss [acceptM_def, mark_reg_def, final_def, empty_def, FOLDL] >>
+    Cases_on `t` >-
+      FULL_SIMP_TAC list_ss [acceptM_def, mark_reg_def, final_def, empty_def,
+      shift_def, FOLDL] >>
+    Q.RENAME1_TAC `h1 :: h2 :: t` >>
+    FULL_SIMP_TAC bool_ss [acceptM_def, shift_def, mark_reg_def, FOLDL] >>
+    `FOLDL (shift F) (MInit F (MSym F a)) t = MInit F (MSym F a)` by (
+      Induct_on `t` >| [
+        FULL_SIMP_TAC list_ss [],
+        FULL_SIMP_TAC list_ss [shift_def]
+      ]) >>
+    FULL_SIMP_TAC bool_ss [final_def],
+
+    (* MAlt *)
+    REPEAT STRIP_TAC >>
     FULL_SIMP_TAC set_ss [mark_reg_def, IN_UNION] >>
     METIS_TAC [ACCEPTM_ALT],
 
-    cheat,
+    (* MSeq *)
+    FULL_SIMP_TAC set_ss [acceptM_def] >>
+
+    `final (FOLDL (shift F) (MInit T (MSeq (mark_reg r) (mark_reg r'))) w)` by
+      METIS_TAC [acceptM_def, mark_reg_def] >>
+
+    `∃ x y. (w = x ++ y) ∧
+      final (FOLDL (shift F) (MInit T (mark_reg r)) x) ∧
+      acceptM (mark_reg r') y` by
+      METIS_TAC [ACCEPTM_SEQ_SOUND] >>
+
+    Q.EXISTS_TAC `x` >>
+    Q.EXISTS_TAC `y` >>
+    FULL_SIMP_TAC set_ss [acceptM_def],
+
+    (* MRep *)
     cheat
   ]);
 
@@ -730,6 +768,5 @@ val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
   REPEAT STRIP_TAC >>
   EQ_TAC >>
   REWRITE_TAC [ACCEPTM_IN_LANG, LANG_IN_ACCEPTM]);
-*)
 
 val _ = export_theory();
