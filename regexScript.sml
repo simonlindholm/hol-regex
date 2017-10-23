@@ -2,7 +2,7 @@ open HolKernel Parse boolLib bossLib;
 
 val _ = new_theory "regex";
 
-open listTheory rich_listTheory pairTheory pairSimps pred_setTheory patternMatchesSyntax;
+open listTheory rich_listTheory pairTheory pairSimps boolSimps pred_setTheory patternMatchesSyntax;
 
 (** Definition of a regex. **)
 
@@ -459,7 +459,8 @@ val MARK_UNION_EMPTY = store_thm ("MARK_UNION_EMPTY",
 val MARK_UNION_ID = store_thm ("MARK_UNION_ID",
   ``∀ (r : 'a Reg) ma.
     is_marked_reg r ma ⇒ (mark_union (mark_reg r) ma = ma)``,
-  cheat);
+  Induct >> Cases_on `ma` >>
+  FULL_SIMP_TAC bool_ss [is_marked_reg_def, mark_reg_def, mark_union_def]);
 
 val MARK_UNION_SHIFT = store_thm ("MARK_UNION_SHIFT",
   ``∀ (r : 'a Reg) ma mb b1 b2 c.
@@ -477,20 +478,21 @@ val MARK_UNION_SHIFT = store_thm ("MARK_UNION_SHIFT",
 
     FULL_SIMP_TAC bool_ss [mark_union_def, shift_def],
 
-    (* This is *terrible*. Is there no solver that handles booleans better?
-     * Or at least is able to do boolean rewrites? *)
-    FULL_SIMP_TAC bool_ss [mark_union_def, shift_def] >>
-    RW_TAC bool_ss [] >>
-    `empty (mark_union M M') = empty M` by METIS_TAC [MARK_UNION_EMPTY] >>
-    `empty M' = empty M` by METIS_TAC [IS_MARKED_EMPTY] >>
-    `final (mark_union M M') = final M ∨ final M'` by METIS_TAC [MARK_UNION_FINAL] >>
-    ASM_SIMP_TAC bool_ss [] >>
-    Cases_on `b1` >> Cases_on `b2` >> Cases_on `empty M` >>
-    Cases_on `final M` >> Cases_on `final M'` >> ASM_SIMP_TAC bool_ss [],
+    RW_TAC bool_ss [mark_union_def, shift_def] >>
+    ASM_SIMP_TAC (bool_ss ++ QI_ss ++ DNF_ss)
+      [MARK_UNION_EMPTY, MARK_UNION_FINAL] >>
+    `empty M' = empty M` by METIS_TAC[IS_MARKED_EMPTY] >>
+    ASM_SIMP_TAC (bool_ss ++ DNF_ss) [] >>
+    `((b1 ∧ empty M ∨ final M) ∨ b2 ∧ empty M ∨ final M') =
+    ((b1 ∧ empty M ∨ b2 ∧ empty M) ∨ final M ∨ final M')`
+      suffices_by ASM_SIMP_TAC bool_ss [] >>
+    METIS_TAC [],
 
-    FULL_SIMP_TAC bool_ss [mark_union_def, shift_def] >>
-    RW_TAC bool_ss [MARK_UNION_FINAL] >>
-    cheat
+    RW_TAC bool_ss [mark_union_def, shift_def] >>
+    ASM_SIMP_TAC (bool_ss ++ QI_ss) [MARK_UNION_FINAL] >>
+    `((b1 ∨ final M) ∨ b2 ∨ final M') = ((b1 ∨ b2) ∨ final M ∨ final M')`
+      suffices_by ASM_SIMP_TAC bool_ss [] >>
+    METIS_TAC []
   ]);
 
 (** Equivalence with language **)
@@ -671,37 +673,43 @@ val ACCEPTM_SEQ_SOUND = prove (
               Q.EXISTS_TAC `shift F ma x` >>
               Q.EXISTS_TAC `shift (final ma) mb' x` >>
               FULL_SIMP_TAC bool_ss [SHIFT_IS_MARKED] >>
-
-              `shift (final ma) (mark_union mb'
-                    (FOLDL (shift F) (shift T (mark_reg r) h) w)) x =
-                mark_union (shift (final ma) mb' x)
-                  (shift F (FOLDL (shift F) (shift T (mark_reg r) h) w) x)`
-                suffices_by SIMP_TAC bool_ss [] >>
+              RW_TAC bool_ss [] >>
 
               Q.ABBREV_TAC `mb2 = FOLDL (shift F) (shift T (mark_reg r) h) w` >>
               `is_marked_reg r mb2`
                 by FULL_SIMP_TAC bool_ss [MARK_IS_MARKED, SHIFT_IS_MARKED,
                                           FOLDL_SHIFT_IS_MARKED, Abbr`mb2`] >>
 
-              (* XXX how do I use MARK_UNION_SHIFT??? *)
-              cheat
+              FULL_SIMP_TAC (bool_ss ++ QI_ss) [MARK_UNION_SHIFT]
             ]
           ) >>
 
-          cheat,
+          FULL_SIMP_TAC bool_ss [SHIFT_MARK_REG_F] >>
+          `is_marked_reg r (FOLDL (shift F) (shift T (mark_reg r) h) w)`
+            by FULL_SIMP_TAC bool_ss [FOLDL_SHIFT_IS_MARKED, SHIFT_IS_MARKED,
+                                                   MARK_IS_MARKED] >>
+
+          FULL_SIMP_TAC bool_ss [final_def] >| [
+            `empty mb'` suffices_by SIMP_TAC bool_ss [] >>
+            METIS_TAC [MARK_UNION_EMPTY, FOLDL_SHIFT_IS_MARKED, SHIFT_IS_MARKED],
+
+            `final mb'` suffices_by SIMP_TAC bool_ss [] >>
+            METIS_TAC [MARK_UNION_FINAL]
+          ],
 
           FULL_SIMP_TAC bool_ss [SHIFT_MARK_REG_F]
         ]) >>
 
       `∃ x y. (w = x ++ y) ∧ final (FOLDL (shift F) (MInit F (shift b mr h)) x) ∧
           acceptM (mark_reg r) y`
-        by (ASM_SIMP_TAC bool_ss []) >>
+        by ASM_SIMP_TAC bool_ss [] >>
       Q.EXISTS_TAC `h :: x` >>
       Q.EXISTS_TAC `y` >>
       FULL_SIMP_TAC list_ss [shift_def]
     ]
   ]);
 
+(*
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
   Induct >>
@@ -722,5 +730,6 @@ val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
   REPEAT STRIP_TAC >>
   EQ_TAC >>
   REWRITE_TAC [ACCEPTM_IN_LANG, LANG_IN_ACCEPTM]);
+*)
 
 val _ = export_theory();
