@@ -390,6 +390,15 @@ val SHIFT_LE = store_thm ("SHIFT_LE",
     Cases_on `b1` >> Cases_on `b2` >>
     FULL_SIMP_TAC bool_ss []);
 
+val FOLDL_SHIFT_LE = store_thm ("FOLDL_SHIFT_LE",
+  ``∀ r s (x : 'a list).
+      (mark_le r s) ⇒ mark_le (FOLDL (shift F) r x) (FOLDL (shift F) s x)``,
+  Induct_on `x` >| [
+    FULL_SIMP_TAC list_ss [],
+    FULL_SIMP_TAC list_ss [] >>
+    METIS_TAC [SHIFT_LE]
+  ]);
+
 val MARK_REG_LE = store_thm ("MARK_REG_LE",
   ``∀ r (mr : 'a MReg). is_marked_reg r mr ⇒ mark_le (mark_reg r) mr``,
   Induct >> Cases_on `mr` >>
@@ -493,6 +502,28 @@ val MARK_UNION_SHIFT = store_thm ("MARK_UNION_SHIFT",
     `((b1 ∨ final M) ∨ b2 ∨ final M') = ((b1 ∨ b2) ∨ final M ∨ final M')`
       suffices_by ASM_SIMP_TAC bool_ss [] >>
     METIS_TAC []
+  ]);
+
+val FOLDL_SHIFT_SPLIT_UNION = store_thm ("FOLDL_SHIFT_SPLIT_UNION",
+  ``∀ r mr (h : 'a) x.
+  is_marked_reg r mr ⇒
+  (FOLDL (shift F) (shift T mr h) x =
+    mark_union (FOLDL (shift F) (shift T (mark_reg r) h) x)
+                (FOLDL (shift F) (shift F mr h) x))``,
+  NTAC 3 STRIP_TAC >>
+  INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+    FULL_SIMP_TAC (list_ss ++ QI_ss) [MARK_UNION_SHIFT, MARK_IS_MARKED,
+                            MARK_UNION_ID],
+
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
+    Q.ABBREV_TAC `a = (FOLDL (shift F) (shift T (mark_reg r) h) x)` >>
+    Q.ABBREV_TAC `b = (FOLDL (shift F) (shift F mr h) x)` >>
+    `is_marked_reg r a` by METIS_TAC [FOLDL_SHIFT_IS_MARKED,
+                            SHIFT_IS_MARKED, MARK_IS_MARKED] >>
+    `is_marked_reg r b` by METIS_TAC [FOLDL_SHIFT_IS_MARKED,
+                            SHIFT_IS_MARKED] >>
+    FULL_SIMP_TAC (list_ss ++ QI_ss) [MARK_UNION_SHIFT]
   ]);
 
 (** Equivalence with language **)
@@ -709,6 +740,23 @@ val ACCEPTM_SEQ_SOUND = prove (
     ]
   ]);
 
+val ACCEPTM_REP_FINAL = prove (
+  ``∀ r mr (w : 'a list).
+    is_marked_reg (Rep r) mr ⇒
+    final mr ⇒
+    acceptM (MRep (mark_reg r)) w ⇒
+    final (FOLDL (shift F) mr w)``,
+  REPEAT STRIP_TAC >>
+  Cases_on `w` >| [
+    FULL_SIMP_TAC list_ss [acceptM_def],
+
+    FULL_SIMP_TAC list_ss [acceptM_def, shift_def, final_def, FOLDL_MINIT_F] >>
+    Cases_on `mr` >> FULL_SIMP_TAC bool_ss [is_marked_reg_def] >>
+    Q.RENAME1_TAC `shift F (MRep mr) h` >>
+    FULL_SIMP_TAC bool_ss [shift_def, final_def] >>
+    METIS_TAC [mark_le_def, SHIFT_LE, MARK_REG_LE, FINAL_LE, FOLDL_SHIFT_LE]
+  ]);
+
 val ACCEPTM_REP_SOUND = prove (
   ``∀ w mr (r : 'a Reg).
   is_marked_reg r mr ⇒
@@ -716,7 +764,82 @@ val ACCEPTM_REP_SOUND = prove (
     ∃ x y. (w = x ++ y) ∧
       final (FOLDL (shift F) (MInit F mr) x) ∧
       acceptM (MRep (mark_reg r)) y``,
-  cheat);
+  Induct >| [
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [acceptM_def, final_def, empty_def],
+
+    REPEAT STRIP_TAC >>
+    FULL_SIMP_TAC list_ss [FOLDL, shift_def] >>
+
+    Q.ABBREV_TAC `mr2 = shift (final mr) mr h` >>
+    Q.ABBREV_TAC `right = FOLDL (shift F) (MRep (shift T (mark_reg r) h)) w` >>
+    `is_marked_reg r mr2` by METIS_TAC[SHIFT_IS_MARKED] >>
+
+    Cases_on `final mr ∧ final right` >| [
+      Q.EXISTS_TAC `[]` >>
+      Q.EXISTS_TAC `h :: w` >>
+      FULL_SIMP_TAC list_ss [final_def, acceptM_def, shift_def, FOLDL,
+                             FOLDL_MINIT_F, Abbr`right`],
+
+      `∃ x y. (w = x ++ y) ∧ final (FOLDL (shift F) (MInit F mr2) x) ∧
+              acceptM (MRep (mark_reg r)) y`
+        by METIS_TAC [] >>
+      Q.EXISTS_TAC `h :: x` >>
+      Q.EXISTS_TAC `y` >>
+      WEAKEN_TAC is_forall >>
+
+      Cases_on `final mr` >| [
+        FULL_SIMP_TAC list_ss [] >>
+        Q.UNABBREV_TAC `mr2` >>
+        Q.UNABBREV_TAC `right` >>
+        FULL_SIMP_TAC bool_ss [shift_def, FOLDL_MINIT_F, final_def] >>
+
+        `FOLDL (shift F) (shift T mr h) x =
+          mark_union (FOLDL (shift F) (shift T (mark_reg r) h) x)
+                     (FOLDL (shift F) (shift F mr h) x)` by
+            METIS_TAC [FOLDL_SHIFT_SPLIT_UNION] >>
+
+        Q.ABBREV_TAC `a = (FOLDL (shift F) (shift T (mark_reg r) h) x)` >>
+        Q.ABBREV_TAC `b = (FOLDL (shift F) (shift F mr h) x)` >>
+        Q.ABBREV_TAC `c = (FOLDL (shift F) (shift T mr h) x)` >>
+        `is_marked_reg r a` by METIS_TAC [FOLDL_SHIFT_IS_MARKED,
+                                SHIFT_IS_MARKED, MARK_IS_MARKED] >>
+        `is_marked_reg r b` by METIS_TAC [FOLDL_SHIFT_IS_MARKED,
+                                SHIFT_IS_MARKED] >>
+        `final c = final a ∨ final b` by METIS_TAC [MARK_UNION_FINAL] >>
+        Cases_on `final b` >- ASM_REWRITE_TAC [] >>
+        `final a` by METIS_TAC [] >>
+        FULL_SIMP_TAC list_ss [FOLDL_APPEND] >>
+
+        `mark_le
+          (MRep (FOLDL (shift F) (shift T (mark_reg r) h) x))
+          (FOLDL (shift F) (MRep (shift T (mark_reg r) h)) x)` by (
+          Q.ID_SPEC_TAC `x` >>
+          INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+            FULL_SIMP_TAC list_ss [MARK_LE_REFL],
+
+            REPEAT STRIP_TAC >>
+            FULL_SIMP_TAC list_ss [FOLDL_SNOC] >>
+            Q.ABBREV_TAC `ma = (FOLDL (shift F) (shift T (mark_reg r) h) x')` >>
+            Q.ABBREV_TAC `mb = (FOLDL (shift F) (MRep (shift T (mark_reg r) h)) x')` >>
+            Cases_on `mb` >> FULL_SIMP_TAC bool_ss [mark_le_def] >>
+            FULL_SIMP_TAC list_ss [mark_le_def, shift_def] >>
+            METIS_TAC [SHIFT_LE]
+          ]
+        ) >>
+
+        Q.ABBREV_TAC `a2 = (FOLDL (shift F) (MRep (shift T (mark_reg r) h)) x)` >>
+        `is_marked_reg (Rep r) a2`
+            by METIS_TAC [FOLDL_SHIFT_IS_MARKED, SHIFT_IS_MARKED, MARK_IS_MARKED,
+                                is_marked_reg_def] >>
+        `final a2` by METIS_TAC [FINAL_LE, final_def] >>
+
+        METIS_TAC [ACCEPTM_REP_FINAL],
+
+        FULL_SIMP_TAC list_ss [Abbr`mr2`, shift_def]
+      ]
+    ]
+  ]);
 
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
