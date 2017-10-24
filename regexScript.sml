@@ -637,7 +637,7 @@ val ACCEPTM_SEQ_SOUND = prove (
     FULL_SIMP_TAC list_ss [FOLDL, shift_def] >>
 
     Q.ABBREV_TAC `acleft = b ∧ empty mr ∨ final mr` >>
-    Q.ABBREV_TAC `right = (FOLDL (shift F) (shift T (mark_reg r) h) w)` >>
+    Q.ABBREV_TAC `right = FOLDL (shift F) (shift T (mark_reg r) h) w` >>
 
     Cases_on `acleft ∧ final right` >| [
       Q.EXISTS_TAC `[]` >>
@@ -709,6 +709,15 @@ val ACCEPTM_SEQ_SOUND = prove (
     ]
   ]);
 
+val ACCEPTM_REP_SOUND = prove (
+  ``∀ w mr (r : 'a Reg).
+  is_marked_reg r mr ⇒
+  final (FOLDL (shift F) (MInit F (MRep mr)) w) ⇒
+    ∃ x y. (w = x ++ y) ∧
+      final (FOLDL (shift F) (MInit F mr) x) ∧
+      acceptM (MRep (mark_reg r)) y``,
+  cheat);
+
 val ACCEPTM_IN_LANG = prove (
   ``∀ (r : 'a Reg) w. acceptM (mark_reg r) w ⇒ w ∈ (language_of r)``,
   Induct >>
@@ -760,7 +769,34 @@ val ACCEPTM_IN_LANG = prove (
     FULL_SIMP_TAC set_ss [acceptM_def],
 
     (* MRep *)
-    cheat
+    FULL_SIMP_TAC set_ss [mark_reg_def] >>
+    Q.UNDISCH_TAC `acceptM (MRep (mark_reg r)) w` >>
+    measureInduct_on `LENGTH w` >>
+    Cases_on `w` >| [
+      STRIP_TAC >>
+      Q.EXISTS_TAC `[]` >>
+      FULL_SIMP_TAC list_ss [],
+
+      REPEAT STRIP_TAC >>
+      FULL_SIMP_TAC list_ss [acceptM_def, shift_def] >>
+      `is_marked_reg r (shift T (mark_reg r) h)`
+        by METIS_TAC [SHIFT_IS_MARKED, MARK_IS_MARKED] >>
+      `∃ x y. (t = x ++ y) ∧
+              final (FOLDL (shift F) (MInit F (shift T (mark_reg r) h)) x) ∧
+              acceptM (MRep (mark_reg r)) y`
+        by METIS_TAC [ACCEPTM_REP_SOUND] >>
+      FULL_SIMP_TAC list_ss [acceptM_def] >>
+      `LENGTH y < SUC (LENGTH x + LENGTH y)` by DECIDE_TAC >>
+      `∃li. (y = FLAT li) ∧ ∀x. MEM x li ⇒ x ∈ language_of r`
+        by METIS_TAC [] >>
+      Q.EXISTS_TAC `(h :: x) :: li` >>
+      ASM_SIMP_TAC list_ss [] >>
+      `(h::x) ∈ language_of r`
+        suffices_by METIS_TAC [] >>
+      `final (FOLDL (shift F) (MInit T (mark_reg r)) (h::x))`
+        suffices_by METIS_TAC [] >>
+      FULL_SIMP_TAC list_ss [shift_def]
+    ]
   ]);
 
 val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
