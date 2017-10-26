@@ -289,9 +289,9 @@ val mark_union_def = Define `
   (mark_union (MRep ma) (MRep mb) = MRep (mark_union ma mb)) ∧
   (mark_union (MInit b1 ma) (MInit b2 mb) = MInit (b1 ∨ b2) (mark_union ma mb))`;
 
-(** Some tests **)
+val accept2_def = Define `accept2 r w = acceptM (mark_reg r) w`;
 
-val accept2_def = Define `accept2 r l = acceptM (mark_reg r) l`;
+(** Some tests **)
 
 val _ = assert_true ``empty (MAlt MEps (MEps : 'a MReg))``;
 val _ = assert_true ``empty (MAlt MEps (MSym T 2))``;
@@ -927,5 +927,107 @@ val ACCEPTM_CORRECT = store_thm ("ACCEPTM_CORRECT",
   REPEAT STRIP_TAC >>
   EQ_TAC >>
   REWRITE_TAC [ACCEPTM_IN_LANG, LANG_IN_ACCEPTM]);
+
+(** Definition of a cached marked regex, on which the final optimized regex
+ * matcher operates **)
+
+val _ = Datatype `
+  CMReg = CMEps |
+    CMSym bool 'a |
+    CMAlt bool (*empty*) bool (*final*) CMReg CMReg |
+    CMSeq bool (*empty*) bool (*final*) CMReg CMReg |
+    CMRep bool (*final*) CMReg |
+    CMInit bool (*empty*) bool (*final*) bool CMReg`;
+
+(** Optimized regex matcher. **)
+
+val cempty_def = Define `
+  (cempty CMEps = T) ∧
+  (cempty (CMSym _ (_ : 'a)) = F) ∧
+  (cempty (CMAlt e _ _ _) = e) ∧
+  (cempty (CMSeq e _ _ _) = e) ∧
+  (cempty (CMRep _ _) = T) ∧
+  (cempty (CMInit e _ _ _) = e)`;
+
+val cfinal_def = Define `
+  (cfinal CMEps = F) ∧
+  (cfinal (CMSym b (_ : 'a)) = b) ∧
+  (cfinal (CMAlt _ f _ _) = f) ∧
+  (cfinal (CMSeq _ f _ _) = f) ∧
+  (cfinal (CMRep f _) = f) ∧
+  (cfinal (CMInit _ f _ _) = f)`;
+
+val cupdate_def = Define `
+  (cupdate CMEps = CMEps) ∧
+  (cupdate (CMSym b (c : 'a)) = CMSym b c) ∧
+  (cupdate (CMAlt _ _ p q) = CMAlt (cempty p ∨ cempty q) (cfinal p ∨ cfinal q) p q) ∧
+  (cupdate (CMSeq _ _ p q) = CMSeq (cempty p ∧ cempty q) ((cfinal p ∧ cempty q) ∨ cfinal q) p q) ∧
+  (cupdate (CMRep _ r) = CMRep (cfinal r) r) ∧
+  (cupdate (CMInit _ _ b r) = CMInit (cempty r) ((b ∧ cempty r) ∨ cfinal r) b r)`;
+
+val cshift_def = Define `
+  (cshift _ CMEps _ = CMEps) ∧
+  (cshift m (CMSym _ x) c = CMSym (m ∧ (x = c)) x) ∧
+  (cshift m (CMAlt _ _ p q) c = cupdate (CMAlt F F (cshift m p c) (cshift m q c))) ∧
+  (cshift m (CMSeq _ _ p q) c = cupdate
+      (CMSeq F F (cshift m p c) (cshift ((m ∧ cempty p) ∨ cfinal p) q c))) ∧
+  (cshift m (CMRep _ r) c = cupdate (CMRep F (cshift (m ∨ cfinal r) r c))) ∧
+  (cshift m (CMInit _ _ b r) c = cupdate (CMInit F F F (cshift (m ∨ b) r c)))`;
+
+val acceptCM_def = Define `
+  acceptCM mr (s : 'a list) = cfinal (FOLDL (cshift F) (cupdate (CMInit F F T mr)) s)`;
+
+val cache_reg_def = Define `
+  (cache_reg MEps = CMEps) ∧
+  (cache_reg (MSym b (c : 'a)) = CMSym b c) ∧
+  (cache_reg (MAlt p q) = cupdate (CMAlt F F (cache_reg p) (cache_reg q))) ∧
+  (cache_reg (MSeq p q) = cupdate (CMSeq F F (cache_reg p) (cache_reg q))) ∧
+  (cache_reg (MRep r) = cupdate (CMRep F (cache_reg r))) ∧
+  (cache_reg (MInit b r) = cupdate (CMInit F F b (cache_reg r))) `;
+
+val accept3_def = Define `accept3 r w = acceptCM (cache_reg (mark_reg r)) w`;
+
+(** Basic lemmata **)
+
+val CEMPTY_CORRECT = store_thm ("CEMPTY_CORRECT",
+  ``∀ (r : 'a MReg). cempty (cache_reg r) = empty r``,
+  Induct >>
+  FULL_SIMP_TAC bool_ss [cache_reg_def, empty_def, cempty_def, cupdate_def]);
+
+val CFINAL_CORRECT = store_thm ("CFINAL_CORRECT",
+  ``∀ (r : 'a MReg). cfinal (cache_reg r) = final r``,
+  Induct >>
+  FULL_SIMP_TAC bool_ss
+    [cache_reg_def, final_def, cfinal_def, cupdate_def, CEMPTY_CORRECT]);
+
+val CSHIFT_CORRECT = store_thm ("CSHIFT_CORRECT",
+  ``∀ r b (c : 'a). cshift b (cache_reg r) c = cache_reg (shift b r c)``,
+  Induct >>
+    FULL_SIMP_TAC bool_ss [cache_reg_def, shift_def, cshift_def, cupdate_def,
+      CEMPTY_CORRECT, CFINAL_CORRECT]);
+
+(** Equivalence with language **)
+
+val ACCEPTCM_CORRECT = store_thm ("ACCEPTCM_CORRECT",
+  ``∀ r (w : 'a list). acceptCM (cache_reg r) w = acceptM r w``,
+  REPEAT STRIP_TAC >>
+  SIMP_TAC bool_ss [acceptCM_def, acceptM_def] >>
+  `(FOLDL (cshift F) (cupdate (CMInit F F T (cache_reg r))) w) =
+      cache_reg (FOLDL (shift F) (MInit T r) w)`
+    suffices_by ASM_SIMP_TAC bool_ss [CFINAL_CORRECT] >>
+  `cupdate (CMInit F F T (cache_reg r)) = cache_reg (MInit T r)`
+    by ASM_SIMP_TAC bool_ss [cache_reg_def] >>
+  ASM_SIMP_TAC bool_ss [] >>
+  WEAKEN_TAC (K true) >>
+  Q.RENAME1_TAC `cache_reg mr` >>
+  Q.ID_SPEC_TAC `w` >>
+  INDUCT_THEN SNOC_INDUCT ASSUME_TAC >| [
+    ASM_SIMP_TAC list_ss [],
+    ASM_SIMP_TAC list_ss [FOLDL_SNOC, CSHIFT_CORRECT]
+  ]);
+
+val ACCEPTCM_CORRECT_LANG = store_thm ("ACCEPTCM_CORRECT_LANG",
+  ``∀ r w. acceptCM (cache_reg (mark_reg r)) w ⇔ w ∈ (language_of r)``,
+  METIS_TAC [ACCEPTCM_CORRECT, ACCEPTM_CORRECT]);
 
 val _ = export_theory();
