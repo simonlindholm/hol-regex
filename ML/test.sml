@@ -5,7 +5,7 @@ open regexLib;
 fun main () = let
   val args = CommandLine.arguments()
   val str = hd args
-    handle Empty => (print "Usage: ./test regex\n"; raise Empty);
+    handle e as Empty => (print "Usage: ./test regex\n"; raise e)
   val re = parseRegex str
     handle e as (SyntaxError(msg)) => (print ("Syntax error: " ^ msg ^ "\n"); raise e)
 
@@ -22,8 +22,7 @@ fun main () = let
   fun loop() =
     case (TextIO.inputLine TextIO.stdIn)
       of SOME line => (test line; loop())
-        | NONE => ()
+       | NONE => ()
 in
-  print "GO!\n";
   loop()
 end
