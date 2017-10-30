@@ -1,4 +1,4 @@
-signature regexLib =
+signature RegexLib =
 sig
   datatype Regex
        = Eps

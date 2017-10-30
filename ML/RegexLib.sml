@@ -1,4 +1,4 @@
-structure regexLib :> regexLib =
+structure RegexLib :> RegexLib =
 struct
   datatype Regex
        = Eps

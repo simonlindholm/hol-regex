@@ -1,5 +1,5 @@
 
-open regexLib;
+open RegexLib;
 
 fun main () = let
   val args = CommandLine.arguments()
