@@ -11,6 +11,15 @@ holdir = str(subprocess.check_output(["./holdir.sh"]), 'utf-8')
 out = []
 handled = set()
 def rec(path):
+    # XXX We are trying to avoid the overlay, but still want to use
+    # regexpMatch, which depends on it. Replace its dependency by the
+    # primitives it really uses.
+    if "Overlay" in path:
+        rec("$(HOLDIR)/tools-poly/poly/Binaryset")
+        rec("$(HOLDIR)/tools-poly/poly/Binarymap")
+        rec("$(HOLDIR)/tools-poly/poly/Listsort")
+        return
+
     path = path.replace('$(HOLDIR)', holdir)
     if path in handled:
         return

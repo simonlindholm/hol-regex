@@ -1,11 +1,41 @@
 structure regexLib :> regexLib =
 struct
+  datatype Regex
+       = Eps
+       | Sym of char
+       | Alt of Regex * Regex
+       | Seq of Regex * Regex
+       | Rep of Regex
 
-  open regexML
+  type Matcher = Regex -> string -> bool
 
-  exception SyntaxError of string;
+  exception SyntaxError of string
 
-  fun parseRegex (input : string) : char Reg = let
+  fun regexToCharReg Eps = regexML.Eps
+    | regexToCharReg (Sym c) = regexML.Sym c
+    | regexToCharReg (Alt(p, q)) = regexML.Alt (regexToCharReg p, regexToCharReg q)
+    | regexToCharReg (Seq(p, q)) = regexML.Seq (regexToCharReg p, regexToCharReg q)
+    | regexToCharReg (Rep r) = regexML.Rep (regexToCharReg r)
+
+  fun SlowMatcher (re : Regex) (str : string) : bool =
+    regexML.accept (regexToCharReg re) (explode str)
+
+  fun FasterMatcher (re : Regex) (str : string) : bool =
+    regexML.accept2 (regexToCharReg re) (explode str)
+
+  fun FastestMatcher (re : Regex) (str : string) : bool =
+    regexML.accept3 (regexToCharReg re) (explode str)
+
+  fun regexToBuiltin Eps = regexpMatch.Epsilon
+    | regexToBuiltin (Sym c) = regexpMatch.Symbs (regexpMatch.pred_to_set (fn d => d = c))
+    | regexToBuiltin (Alt(p, q)) = regexpMatch.Sum (regexToBuiltin p, regexToBuiltin q)
+    | regexToBuiltin (Seq(p, q)) = regexpMatch.Dot (regexToBuiltin p, regexToBuiltin q)
+    | regexToBuiltin (Rep r) = regexpMatch.Star (regexToBuiltin r)
+
+  fun BuiltinMatcher (re : Regex) (str : string) : bool =
+    regexpMatch.match (regexToBuiltin re) str
+
+  fun parseRegex (input : string) : Regex = let
     val len = size input
     val pos = ref 0
 
@@ -29,18 +59,18 @@ struct
     fun moreAtoms (ch : char) : bool =
       (ch <> #"\^@" andalso ch <> #")" andalso ch <> #"|" andalso ch <> #"*")
 
-    fun parseAlt() : char Reg = let
+    fun parseAlt() : Regex = let
       val a = parseSeq()
     in
       if peek() = #"|" then (expect #"|"; Alt(a, parseAlt()))
       else a
     end
 
-    and parseSeq() : char Reg =
+    and parseSeq() : Regex =
       if moreAtoms (peek()) then parseNonEmptySeq()
       else Eps
 
-    and parseNonEmptySeq() : char Reg = let
+    and parseNonEmptySeq() : Regex = let
       val a = parseRep()
     in
       if moreAtoms (peek()) then
@@ -48,13 +78,13 @@ struct
       else a
     end
 
-    and parseRep() : char Reg = addStars (parseAtom())
+    and parseRep() : Regex = addStars (parseAtom())
 
-    and addStars (re : char Reg) : char Reg =
+    and addStars (re : Regex) : Regex =
       if peek() = #"*" then (expect #"*"; addStars (Rep(re)))
       else re
 
-    and parseAtom() : char Reg = let
+    and parseAtom() : Regex = let
       val ch = eat()
     in
       if ch = #"(" then parseAlt() before expect #")"
@@ -64,5 +94,7 @@ struct
   in
     parseAlt() before expectEOF()
   end
+
+  fun matches (m : Matcher) (re : Regex) (str : string) : bool = m re str
 
 end

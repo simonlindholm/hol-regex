@@ -1,6 +1,6 @@
 OPTIONS = NO_OVERLAY
 EXTRA_CLEANS = $(wildcard *ML.sig) $(wildcard *ML.sml) test
-INCLUDES = .. $(HOLDIR)/src/emit/ML/
+INCLUDES = .. $(HOLDIR)/src/emit/ML/ $(HOLDIR)/tools/Holmake/ $(HOLDIR)/tools/Holmake/poly/ $(HOLDIR)/tools-poly/poly/
 
 default: all
 
@@ -9,7 +9,7 @@ regexML.sig: ../regexEmit.uo
 
 regexML.sml: regexML.sig
 
-test: test.uo regexML.sml regexLib.sml
+test: test.uo regexML.uo regexLib.uo
 	python3 combine.py test > .temp && polyc .temp -o test && rm .temp
 
-all: regexML.ui regexML.uo test
+all: test

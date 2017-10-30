@@ -1,5 +1,4 @@
 
-open regexML;
 open regexLib;
 
 fun main () = let
@@ -15,7 +14,7 @@ fun main () = let
     else str
 
   fun test str =
-    if accept re (explode (removeNl str))
+    if matches BuiltinMatcher re (removeNl str)
       then print str
       else ()
 
