@@ -1,7 +1,7 @@
 
 open RegexLib;
 
-fun selftest () : unit = let
+fun selftest (optMatcher : Matcher option) : unit = let
   fun test name matcher = let
     fun check reg str expected =
       if matches matcher (parseRegex reg) str = expected
@@ -63,17 +63,22 @@ fun selftest () : unit = let
     print "done\n"
   )
   end
-in (
-  test "SlowMatcher" SlowMatcher;
-  test "FasterMatcher" FasterMatcher;
-  test "FastestMatcher" FastestMatcher;
-  test "BuiltinMatcher" BuiltinMatcher
-)
+in
+  case optMatcher of
+       SOME m => test "given matcher" m
+     | NONE => (
+         test "SlowMatcher" SlowMatcher;
+         test "FasterMatcher" FasterMatcher;
+         test "FastestMatcher" FastestMatcher;
+         test "BuiltinMatcher" BuiltinMatcher
+       )
 end
 
-fun repl (str : string) : unit = let
+fun repl (optMatcher: Matcher option, str : string) : unit = let
   val re = parseRegex str
     handle e as (SyntaxError(msg)) => (print ("Syntax error: " ^ msg ^ "\n"); raise e)
+
+  val matcher = getOpt (optMatcher, FastestMatcher)
 
   fun removeNl str =
     if String.isSuffix "\n" str
@@ -81,7 +86,7 @@ fun repl (str : string) : unit = let
     else str
 
   fun test str =
-    if matches FastestMatcher re (removeNl str)
+    if matches matcher re (removeNl str)
       then print str
       else ()
 
@@ -94,10 +99,21 @@ in
 end
 
 fun main () = let
+  val matcher = ref (NONE: Matcher option)
+  fun parseMatcher "slow" = SOME SlowMatcher
+    | parseMatcher "faster" = SOME FasterMatcher
+    | parseMatcher "fastest" = SOME FastestMatcher
+    | parseMatcher "builtin" = SOME BuiltinMatcher
+    | parseMatcher str =
+        (print ("Warning: unrecognized matcher \"" ^ str ^ "\"\n"); NONE)
+
   val args = CommandLine.arguments()
+  val args2 = if not (null args) andalso String.isPrefix "--matcher=" (hd args)
+              then (matcher := parseMatcher (String.extract (hd args, 10, NONE)); tl args)
+              else args
 in
-  case args of
-       [] => selftest ()
-     | [str] => repl str
-     | _ => print "Usage: ./test [regex]\n"
+  case args2 of
+       [] => selftest (!matcher)
+     | [str] => repl (!matcher, str)
+     | _ => print ("Usage: ./test [--matcher=slow|faster|fastest|builtin] [regex]\n")
 end
