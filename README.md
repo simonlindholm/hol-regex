@@ -2,7 +2,7 @@
 
 This repo contains a simple, formally verified implementation of a regex engine in Standard ML.
 The formal verification is done using [HOL](https://hol-theorem-prover.org/), with code auto-generated from HOL definitions using the EmitML library.
-This project was done as part of an interactive theorem proving course at KTH, and is not likely to be of much practical use.
+This project was done as part of an interactive theorem proving course at KTH, and is unlikely to be of much practical use.
 
 The regex engine is based on the very nice paper *A Play on Regular Expressions* by Sebastian Fischer, Frank Huch and Thomas Wilke, published at ICFP 2010 (http://www-ps.informatik.uni-kiel.de/~sebf/pub/regexp-play.html).
 
@@ -22,9 +22,9 @@ Alternatively, `./test` without arguments runs a small self-test on the library.
 `bench.py` does some unscientific performance benchmarking of the three different algorithms
 implemented by the library, and the built-in regex matcher (regexpMatch.sml) that comes with HOL.
 Results vary quite a bit from run to run because of garbage collection and similar non-determinism,
-but might still give some hint about real-world performance.
+but still give some hint about real-world performance.
 
-On my ~2015 era laptop I see the following performance measurements:
+On my 2015 era laptop I get the following results:
 
 ```
 Benchmark: |aa*aa| vs |a^n|
@@ -43,7 +43,7 @@ n \ matcher |       slow |     faster |    fastest |    builtin
 ```
 
 (Short regex, long string. `slow` is terrible; `faster` and `fastest` are about equally good.
-The `builtin` matcher is 10x faster, but still in the same ballpark.)
+The `builtin` matcher is 10x faster. The three last all scale linearly.)
 
 ```
 Benchmark: |a (a|b)^n a| vs |a^(n+2)|
@@ -59,7 +59,9 @@ n \ matcher |       slow |     faster |    fastest |    builtin
 ---------------
 ```
 
-(Long regex, long string. `slow` gets lucky and does surprisingly well. `faster` and `fastest` both cope pretty well, though `fastest` is slightly slower, probably due to generating more garbage.
+(Long regex, long string. `slow` gets lucky and does surprisingly well.
+`faster` and `fastest` both cope pretty well, scaling quadratically with n.
+`fastest` is slightly slower, likely due to generating more garbage.
 `builtin` does reasonably up to a point, but is not well optimized for large regexes.)
 
 ```
@@ -74,4 +76,6 @@ n \ matcher |       slow |     faster |    fastest |    builtin
 ---------------
 ```
 
-(Long regex, short string. `slow` again gets lucky. `fastest` does asymptotically better than `faster` due to caching. As seen before, `builtin` does not cope well with long regexes.)
+(Long regex, short string. `slow` again gets lucky.
+`fastest` does asymptotically better than `faster` due to caching (linear vs quadratic in n).
+As seen before, `builtin` does not cope well with long regexes.)
