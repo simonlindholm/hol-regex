@@ -1,6 +1,6 @@
 #!/bin/bash
 POLY=/usr/bin/poly
-DIR=$(dirname "$(readlink -f "$0")")
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 HOLDIR=$("$DIR/holdir.sh")
 BIN="$HOLDIR/bin"
